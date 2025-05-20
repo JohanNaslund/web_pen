@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Sessionskapturing{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <!-- Display target URL and ZAP mode -->
+        <div class="alert alert-info mb-4">
+            <h5>Sessionskapturing och Inloggning</h5>
+            <p><strong>Aktuellt ZAP-läge:</strong> 
+                <span class="badge 
+                    {% if zap_mode == 'safe' %}bg-success
+                    {% elif zap_mode == 'protect' %}bg-primary
+                    {% elif zap_mode == 'standard' %}bg-warning
+                    {% elif zap_mode == 'attack' %}bg-danger
+                    {% else %}bg-secondary{% endif %}">
+                    {{ zap_mode|upper }}
+                </span>
+            </p>
+            {% if zap_mode == 'standard' or zap_mode == 'attack' %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> <strong>Varning:</strong> Du använder ett läge som aktivt testar applikationen. Detta kan skapa skräpdata eller orsaka problem i testade system. Använd endast detta i testmiljöer eller när du kan rensa testdata efteråt.
+            </div>
+            {% endif %}
+            
+            <p>För att skapa en användbar PEN-testning-rapport, följ dessa steg:</p>
+            <ol>
+                <li>Konfigurera en Firefox webbläsare att använda proxyn nedan.</li>
+                <li>Besök målapplikationen: <a href="{{ target_url }}" target="_blank">{{ target_url }}</a></li>
+                <li>Logga in och <strong>utforska all funktionalitet</strong> som du vill testa.</li>
+                <li>Prova att utföra alla möjliga åtgärder (sök, filtrera, lägg till data, etc.)</li>
+                <li>När du har utforskat applikationen ordentligt, fortsätt till scanning.</li>
+            </ol>
+            
+            <p><strong>Aktuell session:</strong> {{ zap_session_name }}</p>
+        </div>
+        <div class="card mb-3">
+            <div class="card-header">Steg 1: Konfigurera webbläsarproxy</div>
+            <div class="card-body">
+                <p>Konfigurera din webbläsare att använda följande proxyserver:</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Proxy Host</label>
+                            <input type="text" class="form-control" value="{{ proxy_host }}" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Proxy Port</label>
+                            <input type="text" class="form-control" value="{{ proxy_port }}" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+
+                
+            <div class="card mb-3">
+                <div class="card-header">Steg 2: Surfning och inloggning</div>
+                <div class="card-body">
+                    <p>Med proxykonfigurationen klar, följ dessa steg:</p>
+                    <ol>
+                        <li>Besök målwebbplatsen <a href="{{ target_url }}" target="_blank">{{ target_url }}</a></li>
+                        <li>Logga in med giltiga uppgifter</li>
+                        <li>Surfa runt på de sidor du vill testa så att ZAP kan fånga upp deras struktur</li>
+                        <li>MYCKET VIKTIGT. Om du använder Protect, Standard eller Attack mode så kommer PEN-testningen automatisk replikera dina inmatningar med testdata. Var extremt försiktig.</li>
+                    </ol>
+                    
+                    <div class="mt-3">
+                        <h5>Aktiv session</h5>
+                        <p><strong>Session:</strong> {{ zap_session_name or 'Session 1' }}</p>
+                        <p class="text-muted">En standardsession har skapats automatiskt. Surfa runt på målapplikationen via proxyn för att samla in data.</p>
+                    </div>
+                </div>
+            </div>
+
+
+        <div class="card mb-3">
+            <div class="card-header">Steg 3: Fortsätt till scanning</div>
+            <div class="card-body">
+                <p>När du har loggat in och skapat/valt en session, kan du fortsätta till scanning:</p>
+                <a href="/scan" class="btn btn-success">Fortsätt till scanning</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const createSessionBtn = document.getElementById('create_session_btn');
+    const sessionNameInput = document.getElementById('session_name');
+    const sessionsContainer = document.getElementById('sessions-container');
+    const targetUrlDisplay = document.getElementById('target_url_display');
+    
+    // Kontrollera att nödvändiga element finns
+    if (!createSessionBtn || !sessionNameInput || !sessionsContainer || !targetUrlDisplay) {
+        console.error('Required elements not found:', {
+            createSessionBtn: !!createSessionBtn,
+            sessionNameInput: !!sessionNameInput,
+            sessionsContainer: !!sessionsContainer,
+            targetUrlDisplay: !!targetUrlDisplay
+        });
+        
+        // Visa ett felmeddelande på sidan
+        if (sessionsContainer) {
+            sessionsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Fel:</strong> Kunde inte hitta alla nödvändiga element på sidan.
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    // Ladda befintliga sessioner
+    loadSessions();
+    
+    // Skapa ny session
+    createSessionBtn.addEventListener('click', function() {
+        const sessionName = sessionNameInput.value.trim();
+        if (!sessionName) {
+            alert('Vänligen ange ett sessionsnamn.');
+            return;
+        }
+        
+        createSession(sessionName);
+    });
+    
+    // Funktion för att ladda sessioner
+    function loadSessions() {
+        fetch('/api/sessions')
+            .then(response => response.json())
+            .then(data => {
+                updateSessionsList(data.sessions);
+            })
+            .catch(error => {
+                console.error('Error loading sessions:', error);
+                sessionsContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        Fel vid laddning av sessioner: ${error.message}
+                    </div>
+                `;
+            });
+    }
+    
+    // Funktion för att skapa session
+    function createSession(name) {
+        // Få target URL från synligt element
+        const targetUrl = targetUrlDisplay.textContent;
+        
+        console.log('Creating session with name:', name);
+        console.log('Target URL:', targetUrl);
+        
+        fetch('/api/create-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                session_name: name,
+                target_url: targetUrl
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Session "${name}" skapad och aktiverad!`);
+                loadSessions();  // Uppdatera listan
+            } else {
+                alert(`Fel: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error creating session:', error);
+            alert(`Ett fel uppstod: ${error.message}`);
+        });
+    }
+    
+    // Funktion för att aktivera en session
+    function activateSession(name) {
+        const targetUrl = targetUrlDisplay.textContent;
+        
+        fetch('/api/activate-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                session_name: name,
+                target_url: targetUrl
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Session "${name}" aktiverad!`);
+                loadSessions();  // Uppdatera listan
+            } else {
+                alert(`Fel: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error activating session:', error);
+            alert(`Ett fel uppstod: ${error.message}`);
+        });
+    }
+    
+    // Uppdatera sessionslistan i UI
+    function updateSessionsList(sessions) {
+        if (!sessions || sessions.length === 0) {
+            sessionsContainer.innerHTML = `
+                <p>Inga sessioner tillgängliga. Skapa en ny session efter inloggning.</p>
+            `;
+            return;
+        }
+        
+        let html = `<div class="list-group">`;
+        sessions.forEach(session => {
+            const isActive = session.active ? 'active' : '';
+            html += `
+                <div class="list-group-item list-group-item-action ${isActive}">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">${session.name}</h5>
+                        ${session.active ? 
+                          '<span class="badge bg-success">Aktiv</span>' : 
+                          `<button class="btn btn-sm btn-outline-primary activate-session" data-session="${session.name}">Aktivera</button>`}
+                    </div>
+                    <p class="mb-1">Site: ${session.site}</p>
+                    <small>Skapad: ${new Date(session.created).toLocaleString()}</small>
+                </div>
+            `;
+        });
+        html += `</div>`;
+        
+        sessionsContainer.innerHTML = html;
+        
+        // Lägg till eventlisteners för Aktivera-knappar
+        document.querySelectorAll('.activate-session').forEach(button => {
+            button.addEventListener('click', function() {
+                const sessionName = this.getAttribute('data-session');
+                activateSession(sessionName);
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

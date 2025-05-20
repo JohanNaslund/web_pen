@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}SQL Injection Scan - {{ scan_id }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h2>SQL Injection Scanning - Detaljer</h2>
+        <div>
+            <button id="refresh-btn" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-clockwise"></i> Uppdatera
+            </button>
+            <a href="/logs" class="btn btn-outline-secondary">Alla loggar</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5>Skanningsinfo</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <strong>Scan ID:</strong> <span id="scan-id">{{ scan_id }}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Status:</strong> <span id="scan-status" class="badge bg-secondary">Laddar...</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Startad:</strong> <span id="scan-start-time">-</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Varaktighet:</strong> <span id="scan-duration">-</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Framsteg:</strong>
+                            <div class="progress mt-1">
+                                <div id="scan-progress" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5>Resultatöversikt</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <strong>URL:er bearbetade:</strong> <span id="urls-processed">0</span> / <span id="urls-total">0</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Hittade sårbarheter:</strong> <span id="vulnerabilities-count" class="fs-4 fw-bold text-danger">0</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Loggfiler:</strong>
+                            <div id="log-files-container">
+                                <span class="text-muted">Ingen logg tillgänglig</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h5>Senaste sårbarheterna</h5>
+            </div>
+            <div class="card-body">
+                <div id="findings-container">
+                    <p class="text-muted">Inga sårbarheter har hittats ännu...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const scanId = document.getElementById('scan-id').textContent;
+        let pollingInterval;
+        
+        // Funktion för att formatera tid
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            
+            let result = '';
+            if (hours > 0) result += `${hours}h `;
+            if (minutes > 0 || hours > 0) result += `${minutes}m `;
+            result += `${remainingSeconds}s`;
+            
+            return result;
+        }
+        
+        function formatTimestamp(timestamp) {
+            return new Date(timestamp * 1000).toLocaleString();
+        }
+        
+        // Funktion för att uppdatera sidan med skanningsdetaljer
+        function updateScanDetails() {
+            fetch(`/api/sql-scan-details/${scanId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error fetching scan details:', data.error);
+                        return;
+                    }
+                    
+                    // Uppdatera status
+                    const statusBadge = document.getElementById('scan-status');
+                    const statusText = data.status.status;
+                    
+                    statusBadge.textContent = statusText;
+                    statusBadge.className = 'badge ' + 
+                        (statusText === 'running' ? 'bg-info' : 
+                         statusText === 'completed' ? 'bg-success' : 
+                         statusText === 'error' ? 'bg-danger' : 'bg-secondary');
+                    
+                    // Uppdatera tidsinformation
+                    if (data.start_time) {
+                        document.getElementById('scan-start-time').textContent = formatTimestamp(data.start_time);
+                    }
+                    
+                    document.getElementById('scan-duration').textContent = formatDuration(data.duration || 0);
+                    
+                    // Uppdatera framsteg
+                    const progress = data.progress_percent || 0;
+                    const progressBar = document.getElementById('scan-progress');
+                    progressBar.style.width = `${progress}%`;
+                    progressBar.textContent = `${progress}%`;
+                    progressBar.setAttribute('aria-valuenow', progress);
+                    
+                    // Uppdatera URL-räknare
+                    document.getElementById('urls-processed').textContent = data.urls_processed || 0;
+                    document.getElementById('urls-total').textContent = data.urls_total || 0;
+                    
+                    // Uppdatera sårbarhetsinformation
+                    document.getElementById('vulnerabilities-count').textContent = data.results_count || 0;
+                    
+                    // Uppdatera loggfiler
+                    const logFilesContainer = document.getElementById('log-files-container');
+                    if (data.logs && data.logs.length > 0) {
+                        let logHtml = '<ul class="list-group">';
+                        data.logs.forEach(log => {
+                            logHtml += `<li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                                <span>${log.name}</span>
+                                <a href="${log.url}" class="btn btn-sm btn-outline-primary">Visa</a>
+                            </li>`;
+                        });
+                        logHtml += '</ul>';
+                        logFilesContainer.innerHTML = logHtml;
+                    } else {
+                        logFilesContainer.innerHTML = '<span class="text-muted">Ingen logg tillgänglig</span>';
+                    }
+                    
+                    // Uppdatera senaste sårbarheterna
+                    const findingsContainer = document.getElementById('findings-container');
+                    if (data.latest_findings && data.latest_findings.length > 0) {
+                        let findingsHtml = '<div class="table-responsive">';
+                        findingsHtml += '<table class="table table-striped table-hover">';
+                        findingsHtml += '<thead><tr>';
+                        findingsHtml += '<th>Parameter</th>';
+                        findingsHtml += '<th>URL</th>';
+                        findingsHtml += '<th>Typ</th>';
+                        findingsHtml += '<th>Payload</th>';
+                        findingsHtml += '</tr></thead>';
+                        findingsHtml += '<tbody>';
+                        
+                        data.latest_findings.forEach(finding => {
+                            const urlDisplay = finding.url.length > 50 ? finding.url.substring(0, 47) + '...' : finding.url;
+                            const paramName = finding.parameter || 'N/A';
+                            
+                            let type = [];
+                            if (finding.has_sql_error) type.push('Error-based');
+                            if (finding.is_time_based) type.push('Time-based');
+                            if (finding.is_boolean_based) type.push('Boolean-based');
+                            
+                            findingsHtml += '<tr>';
+                            findingsHtml += `<td>${paramName}</td>`;
+                            findingsHtml += `<td title="${finding.url}">${urlDisplay}</td>`;
+                            findingsHtml += `<td>${type.join(', ') || 'Unknown'}</td>`;
+                            findingsHtml += `<td><code>${finding.payload}</code></td>`;
+                            findingsHtml += '</tr>';
+                        });
+                        
+                        findingsHtml += '</tbody></table></div>';
+                        findingsContainer.innerHTML = findingsHtml;
+                    } else {
+                        findingsContainer.innerHTML = '<p class="text-muted">Inga sårbarheter har hittats ännu...</p>';
+                    }
+                    
+                    // Stoppa polling om scanningen är klar
+                    if (statusText === 'completed' || statusText === 'error') {
+                        clearInterval(pollingInterval);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching scan details:', error);
+                });
+        }
+        
+        // Första uppdateringen
+        updateScanDetails();
+        
+        // Starta polling (uppdatera var 5:e sekund)
+        pollingInterval = setInterval(updateScanDetails, 5000);
+        
+        // Hantera manuell uppdatering
+        document.getElementById('refresh-btn').addEventListener('click', updateScanDetails);
+    });
+</script>
+{% endblock %}

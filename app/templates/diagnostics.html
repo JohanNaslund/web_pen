@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Systemdiagnostik{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h2>Systemdiagnostik</h2>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    Denna sida visar status för alla tjänster som används av PEN-testverktyget.
+                </div>
+                
+                <h4>Tjänststatus</h4>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Tjänst</th>
+                                <th>Status</th>
+                                <th>Detaljer</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Flask</td>
+                                <td>
+                                    <span class="badge bg-success">{{ results.flask.status }}</span>
+                                </td>
+                                <td>Webbapplikationstjänst</td>
+                            </tr>
+                            <tr>
+                                <td>ZAP</td>
+                                <td>
+                                    {% if results.zap.status == 'running' %}
+                                    <span class="badge bg-success">Running</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Error</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if results.zap.status == 'running' %}
+                                    Version: {{ results.zap.version }}<br>
+                                    Skannade platser: {{ results.zap.sites_count }}
+                                    {% if results.zap.sites %}
+                                    <ul>
+                                        {% for site in results.zap.sites %}
+                                        <li>{{ site }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% endif %}
+                                    {% else %}
+                                    Fel: {{ results.zap.error }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>SQLMap</td>
+                                <td>
+                                    {% if results.sqlmap.status == 'running' %}
+                                    <span class="badge bg-success">Running</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Error</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if results.sqlmap.status == 'running' %}
+                                    API svarar
+                                    {% else %}
+                                    Fel: {{ results.sqlmap.error }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h4 class="mt-4">Åtgärdsguide</h4>
+                <div class="accordion" id="troubleshootingAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingZAP">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseZAP">
+                                Felsökning av ZAP-anslutning
+                            </button>
+                        </h2>
+                        <div id="collapseZAP" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                            <div class="accordion-body">
+                                <p>Om ZAP inte är igång eller visar fel:</p>
+                                <ol>
+                                    <li>Kontrollera att ZAP-containern är igång: <code>sudo docker ps | grep zap</code></li>
+                                    <li>Om den inte är igång, starta den: <code>sudo docker run -d -p 8080:8080 -p 8090:8090 --name zap ghcr.io/zaproxy/zaproxy:stable zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.key=changeme123 -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true -config proxy.ip=0.0.0.0 -config proxy.port=8090</code></li>
+                                    <li>Kontrollera loggarna: <code>sudo docker logs zap</code></li>
+                                    <li>Testa API-anslutningen direkt: <code>curl http://localhost:8080/JSON/core/view/version/?apikey=changeme123</code></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingSQLMap">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSQLMap">
+                                Felsökning av SQLMap-anslutning
+                            </button>
+                        </h2>
+                        <div id="collapseSQLMap" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                            <div class="accordion-body">
+                                <p>Om SQLMap inte är igång eller visar fel:</p>
+                                <ol>
+                                    <li>Kontrollera att SQLMap-containern är igång: <code>sudo docker ps | grep sqlmap</code></li>
+                                    <li>Om den inte är igång, starta den: <code>sudo docker run -d -p 8775:8775 --name sqlmap paoloo/sqlmap python -m sqlmap.sqlmapapi -s -H 0.0.0.0</code></li>
+                                    <li>Kontrollera loggarna: <code>sudo docker logs sqlmap</code></li>
+                                    <li>Testa API-anslutningen direkt: <code>curl http://localhost:8775</code></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

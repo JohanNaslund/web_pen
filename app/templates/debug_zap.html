@@ -1,0 +1,60 @@
+<!-- templates/debug_zap.html -->
+{% extends "base.html" %}
+{% block title %}ZAP Debug{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h2>ZAP Connection Debug</h2>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <h4>Status: 
+                        <span class="badge {% if results.status == 'available' %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ results.status }}
+                        </span>
+                    </h4>
+                </div>
+                
+                {% if results.details %}
+                <div class="card mb-4">
+                    <div class="card-header">Details</div>
+                    <div class="card-body">
+                        <pre>{{ results.details | tojson(indent=2) }}</pre>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if results.errors %}
+                <div class="card mb-4">
+                    <div class="card-header bg-danger text-white">Errors</div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            {% for error in results.errors %}
+                            <li class="list-group-item">{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="card mb-4">
+                    <div class="card-header">ZAP Configuration</div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            <li class="list-group-item">API Host: {{ config.ZAP_HOST }}</li>
+                            <li class="list-group-item">API Port: {{ config.ZAP_API_PORT }}</li>
+                            <li class="list-group-item">Proxy Port: {{ config.ZAP_PROXY_PORT }}</li>
+                            <li class="list-group-item">API Key: {{ config.ZAP_API_KEY[:4] }}***</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <a href="/" class="btn btn-primary">Back to Home</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

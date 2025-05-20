@@ -1,0 +1,3 @@
+2025-05-17 22:09:00 - INFO - SQL Injection Logger initialized, logging to ./logs/sql_injection/sql_test_20250517_220900.log
+2025-05-17 22:09:00 - INFO - SQLInjectionTester initialized with storage path: ./data/sql_tester
+2025-05-17 22:09:00 - INFO - Initialized with 19 payloads and 22 error patterns

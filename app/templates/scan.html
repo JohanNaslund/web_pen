@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% block title %}Scanning{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h2>Sårbarhetsscanning</h2>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5>Målwebbplats: <span id="target_url_display">{{ target_url }}</span></h5>
+                    <p>Följ stegen nedan för att skanna efter sårbarheter. Processen är automatiserad, men kan ta tid beroende på webbplatsens storlek och komplexitet.</p>
+                    {% if zap_session_name %}
+                    <p class="mt-2 mb-0"><strong>Aktiv ZAP-session:</strong> <span class="badge bg-success">{{ zap_session_name }}</span></p>
+                    {% else %}
+                    <p class="mt-2 mb-0 text-warning"><strong>Varning:</strong> Ingen session är aktiverad. Gå tillbaka till föregående steg för att skapa eller aktivera en session.</p>
+                    {% endif %}
+                </div>
+                
+                <div class="row">
+                    <!-- Spider -->
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h5>Steg 1: Spider</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Kartlägger webbplatsens struktur och hittar länkar.</p>
+                                <div class="progress mb-3 d-none" id="spider-progress-container">
+                                    <div class="progress-bar" id="spider-progress" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <div id="spider-status" class="mb-3">
+                                    Status: <span class="badge bg-secondary">Inte startad</span>
+                                </div>
+                                <form method="POST" action="/scan">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <input type="hidden" name="action" value="start_spider">
+                                    <button type="submit" class="btn btn-primary" id="start-spider-btn">Starta Spider</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ajax Spider -->
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h5>Steg 2: Ajax Spider</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Crawlar JavaScript-baserade applikationer.</p>
+                                <div class="progress mb-3 d-none" id="ajax-spider-progress-container">
+                                    <div class="progress-bar" id="ajax-spider-progress" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <div id="ajax-spider-status" class="mb-3">
+                                    Status: <span class="badge bg-secondary">Inte startad</span>
+                                </div>
+                                <form method="POST" action="/scan">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <input type="hidden" name="action" value="start_ajax_spider">
+                                    <button type="submit" class="btn btn-primary" id="start-ajax-spider-btn">Starta Ajax Spider</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Aktiv scanning -->
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h5>Steg 3: Aktiv scanning</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Söker efter sårbarheter som XSS, injection m.m.</p>
+                                <div class="progress mb-3 d-none" id="active-scan-progress-container">
+                                    <div class="progress-bar" id="active-scan-progress" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <div id="active-scan-status" class="mb-3">
+                                    Status: <span class="badge bg-secondary">Inte startad</span>
+                                </div>
+                                <form method="POST" action="/scan">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <input type="hidden" name="action" value="start_active_scan">
+                                    <button type="submit" class="btn btn-primary" id="start-active-scan-btn" {% if not session.get('spider_scan_id') %}disabled{% endif %}>Starta Aktiv Scanning</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scanningsresultat - flyttat till botten och tar upp full width -->
+                <div class="card mt-4">
+                    <div class="card-header bg-light">
+                        <h4>Scanningsresultat</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h5>ZAP Alerts</h5>
+                                        <h2 id="zap-alerts-count">0</h2>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h5>Ajax Spider URLs</h5>
+                                        <h2 id="ajax-urls-count">0</h2>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h5>Total Status</h5>
+                                        <span class="badge bg-secondary" id="total-status-badge">Inte slutförd</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 col-md-6 mx-auto mt-4">
+                            <a href="/report" class="btn btn-success" id="view-report-btn" disabled>Visa fullständig rapport</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Referens till knappar och status-element
+    const startSpiderBtn = document.getElementById('start-spider-btn');
+    const startActiveScanBtn = document.getElementById('start-active-scan-btn');
+    const startAjaxSpiderBtn = document.getElementById('start-ajax-spider-btn');
+    const viewReportBtn = document.getElementById('view-report-btn');
+    
+    const spiderStatusElem = document.getElementById('spider-status');
+    const activeScanStatusElem = document.getElementById('active-scan-status');
+    const ajaxSpiderStatusElem = document.getElementById('ajax-spider-status');
+    const totalStatusBadge = document.getElementById('total-status-badge');
+    
+    const spiderProgressContainer = document.getElementById('spider-progress-container');
+    const spiderProgressBar = document.getElementById('spider-progress');
+    const activeScanProgressContainer = document.getElementById('active-scan-progress-container');
+    const activeScanProgressBar = document.getElementById('active-scan-progress');
+    const ajaxSpiderProgressContainer = document.getElementById('ajax-spider-progress-container');
+    const ajaxSpiderProgressBar = document.getElementById('ajax-spider-progress');
+    
+    const zapAlertsCount = document.getElementById('zap-alerts-count');
+    const ajaxUrlsCount = document.getElementById('ajax-urls-count');
+    
+    // Flaggor för att spåra om skanningar är slutförda
+    window.spiderComplete = false;
+    window.activeScanComplete = false;
+    window.ajaxSpiderComplete = false;
+    window.pollingActive = true;
+    
+    // Funktion för att uppdatera status
+    function updateStatus() {
+        // Om polling har stoppats, gör ingenting
+        if (!window.pollingActive) {
+            return;
+        }
+        
+        // Använd den nya lättviktiga API-endpoint istället
+        fetch('/api/scan-status-light')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Received status data:", data);  // Debugging
+                
+                // Uppdatera de individuella status-sektionerna
+                updateSpiderStatus(data.spider);
+                updateActiveScanStatus(data.active_scan);
+                updateAjaxSpiderStatus(data.ajax_spider);
+                
+                // Uppdatera total status inklusive resultaträknare
+                updateTotalStatus(data);
+                
+                // Kontrollera om vi ska stoppa polling
+                checkAndStopPolling();
+            })
+            .catch(error => {
+                console.error('Error fetching status:', error);
+            });
+    }
+    
+    function updateSpiderStatus(status) {
+        if (!status) return;
+        
+        const spiderPercent = parseInt(status.status);
+        const state = status.state || '';
+        
+        if (spiderPercent > 0) {
+            spiderProgressContainer.classList.remove('d-none');
+            spiderProgressBar.style.width = spiderPercent + '%';
+            spiderProgressBar.textContent = spiderPercent + '%';
+            
+            // Uppdatera status text baserat på både percent och state
+            let statusText = '';
+            let badgeClass = '';
+            
+            if (state === 'FINISHED' || spiderPercent >= 100) {
+                statusText = 'Slutförd';
+                badgeClass = 'bg-success';
+                window.spiderComplete = true;
+                
+                // Aktivera active scan-knappen och uppdatera visuell status
+                startActiveScanBtn.disabled = false;
+                startSpiderBtn.classList.remove('btn-primary');
+                startSpiderBtn.classList.add('btn-success');
+                startSpiderBtn.innerHTML = 'Spider Klar <i class="bi bi-check-circle"></i>';
+            } else if (state === 'STOPPED') {
+                statusText = 'Stoppad';
+                badgeClass = 'bg-warning';
+            } else if (state === 'RUNNING' || state === 'PENDING') {
+                statusText = `Pågår (${spiderPercent}%)`;
+                badgeClass = 'bg-info';
+            } else {
+                statusText = `${state} (${spiderPercent}%)`;
+                badgeClass = 'bg-secondary';
+            }
+            
+            spiderStatusElem.innerHTML = `Status: <span class="badge ${badgeClass}">${statusText}</span>`;
+        }
+    }
+    
+    function updateActiveScanStatus(status) {
+        if (!status) return;
+        
+        const scanPercent = parseInt(status.status);
+        const state = status.state || '';
+        
+        if (scanPercent > 0) {
+            activeScanProgressContainer.classList.remove('d-none');
+            activeScanProgressBar.style.width = scanPercent + '%';
+            activeScanProgressBar.textContent = scanPercent + '%';
+            
+            // Uppdatera status text baserat på både percent och state
+            let statusText = '';
+            let badgeClass = '';
+            
+            if (state === 'FINISHED' || scanPercent >= 100) {
+                statusText = 'Slutförd';
+                badgeClass = 'bg-success';
+                window.activeScanComplete = true;
+                
+                // Uppdatera visuell status
+                startActiveScanBtn.classList.remove('btn-primary');
+                startActiveScanBtn.classList.add('btn-success');
+                startActiveScanBtn.innerHTML = 'Aktiv Scanning Klar <i class="bi bi-check-circle"></i>';
+            } else if (state === 'STOPPED') {
+                statusText = 'Stoppad';
+                badgeClass = 'bg-warning';
+            } else if (state === 'RUNNING' || state === 'PENDING') {
+                statusText = `Pågår (${scanPercent}%)`;
+                badgeClass = 'bg-info';
+            } else {
+                statusText = `${state} (${scanPercent}%)`;
+                badgeClass = 'bg-secondary';
+            }
+            
+            activeScanStatusElem.innerHTML = `Status: <span class="badge ${badgeClass}">${statusText}</span>`;
+            
+            // Uppdatera antal alerts
+            zapAlertsCount.textContent = status.alerts || 0;
+        }
+    }
+
+    // Update Ajax Spider status
+    function updateAjaxSpiderStatus(status) {
+        if (!status) return;
+        
+        // Check if Ajax Spider is running or has status
+        const isRunning = status.running === true;
+        const statusText = status.status || '';
+        
+        if (isRunning || statusText === 'stopped' || statusText === 'running') {
+            ajaxSpiderProgressContainer.classList.remove('d-none');
+            
+            // If running, show animated progress bar
+            if (isRunning) {
+                ajaxSpiderProgressBar.style.width = '100%';
+                ajaxSpiderProgressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+                ajaxSpiderStatusElem.innerHTML = `Status: <span class="badge bg-info">Pågår</span>`;
+                
+                if (startAjaxSpiderBtn) {
+                    startAjaxSpiderBtn.disabled = true;
+                    startAjaxSpiderBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kör...';
+                }
+            } 
+            // If stopped
+            else if (statusText === 'stopped') {
+                ajaxSpiderProgressBar.style.width = '100%';
+                ajaxSpiderProgressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                
+                const resourcesFound = status.urls_found || 0;
+                ajaxSpiderStatusElem.innerHTML = `Status: <span class="badge bg-success">Slutförd</span> (${resourcesFound} URLs)`;
+                
+                if (startAjaxSpiderBtn) {
+                    startAjaxSpiderBtn.disabled = false;
+                    startAjaxSpiderBtn.classList.remove('btn-primary');
+                    startAjaxSpiderBtn.classList.add('btn-success');
+                    startAjaxSpiderBtn.innerHTML = 'Ajax Spider Klar <i class="bi bi-check-circle"></i>';
+                }
+                
+                // Set flag for Ajax Spider completion
+                window.ajaxSpiderComplete = true;
+            } else {
+                ajaxSpiderStatusElem.innerHTML = `Status: <span class="badge bg-secondary">${statusText}</span>`;
+            }
+        }
+    }
+
+    // I scan.html, uppdatera updateTotalStatus-funktionen för att visa alerts_summary korrekt
+    function updateTotalStatus(data) {
+        // Uppdatera alerts-räknaren baserat på alerts_summary om tillgänglig
+        if (data.alerts_summary) {
+            const totalAlerts = 
+                (parseInt(data.alerts_summary.High) || 0) +
+                (parseInt(data.alerts_summary.Medium) || 0) +
+                (parseInt(data.alerts_summary.Low) || 0) +
+                (parseInt(data.alerts_summary.Informational) || 0);
+                
+            if (zapAlertsCount) {
+                zapAlertsCount.textContent = totalAlerts;
+            }
+        } else if (data.active_scan && data.active_scan.alertCount) {
+            // Fallback till active_scan.alertCount om alerts_summary inte finns
+            if (zapAlertsCount) {
+                zapAlertsCount.textContent = data.active_scan.alertCount;
+            }
+        }
+        
+        // Uppdatera Ajax Spider URLs count
+        if (data.ajax_spider) {
+            const urlsFound = data.ajax_spider.urls_found || 0;
+            if (ajaxUrlsCount) {
+                ajaxUrlsCount.textContent = urlsFound;
+            }
+        }
+        
+        // Kontrollera om alla nödvändiga skanningar är klara
+        const spiderComplete = data.spider && (data.spider.status === '100' || data.spider.state === 'FINISHED');
+        const activeScanComplete = data.active_scan && (data.active_scan.status === '100' || data.active_scan.state === 'FINISHED');
+        const ajaxSpiderComplete = data.ajax_spider && !data.ajax_spider.running && data.ajax_spider.status === 'stopped';
+        
+        // Uppdatera globala tillståndsflaggor för att spåra framsteg
+        window.spiderComplete = spiderComplete;
+        window.activeScanComplete = activeScanComplete;
+        window.ajaxSpiderComplete = ajaxSpiderComplete;
+        
+        const allComplete = spiderComplete && activeScanComplete && ajaxSpiderComplete;
+        
+        if (allComplete) {
+            totalStatusBadge.className = 'badge bg-success';
+            totalStatusBadge.textContent = 'Slutförd';
+            viewReportBtn.disabled = false;
+        } else if (spiderComplete || activeScanComplete || ajaxSpiderComplete) {
+            totalStatusBadge.className = 'badge bg-info';
+            totalStatusBadge.textContent = 'Delvis slutförd';
+            viewReportBtn.disabled = false;  // Aktivera rapport-knappen när minst en del är klar
+        } else {
+            totalStatusBadge.className = 'badge bg-secondary';
+            totalStatusBadge.textContent = 'Inte slutförd';
+            viewReportBtn.disabled = true;
+        }
+        
+        // Logga status för debugging
+        console.log("Status update:", {
+            spiderComplete,
+            activeScanComplete,
+            ajaxSpiderComplete,
+            totalAlerts: zapAlertsCount ? zapAlertsCount.textContent : 'N/A',
+            ajaxUrls: ajaxUrlsCount ? ajaxUrlsCount.textContent : 'N/A'
+        });
+    }
+    
+    // Funktion för att kontrollera om vi ska stoppa polling
+    function checkAndStopPolling() {
+        // Kontrollera om alla nödvändiga skanningar är klara
+        const allComplete = window.spiderComplete && 
+                           window.activeScanComplete && 
+                           window.ajaxSpiderComplete;
+        
+        if (allComplete) {
+            console.log("Alla skanningar är slutförda, stoppar automatisk uppdatering");
+            window.pollingActive = false;
+            clearInterval(window.pollingInterval);
+            
+            // Aktivera rapport-knappen
+            viewReportBtn.disabled = false;
+            
+            // Uppdatera total status
+            totalStatusBadge.className = 'badge bg-success';
+            totalStatusBadge.textContent = 'Slutförd';
+        }
+    }
+    
+    // Uppdatera status varje 5 sekunder och spara intervall-ID
+    window.pollingInterval = setInterval(updateStatus, 5000);
+    
+    // Initial uppdatering
+    updateStatus();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h2>Web PEN Testing Dashboard</h2>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Välkommen till Web PEN Testing-verktyget</h5>
+                <p class="card-text">
+                    Detta verktyg är designat för att hjälpa IT-tekniker att utföra säkerhetstester på webbaserade applikationer, 
+                    både på interna och externa nätverk.
+                </p>
+                
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-1-circle"></i> Konfigurera Target
+                                </h5>
+                                <p class="card-text">Ange URL för den applikation du vill testa.</p>
+                                <a href="/target" class="btn btn-primary">Starta</a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-2-circle"></i> Sessionskapturing
+                                </h5>
+                                <p class="card-text">Logga in på applikationen via proxy för att fånga sessionsdata.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-3-circle"></i> Scanning
+                                </h5>
+                                <p class="card-text">Utför automatisk sårbarhetsscanning med ZAP och SQLMap.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

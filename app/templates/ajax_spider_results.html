@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}Ajax Spider Results{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h2>Ajax Spider Results</h2>
+        <div>
+            <button id="refresh-btn" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-clockwise"></i> Uppdatera
+            </button>
+            <a href="/scan" class="btn btn-outline-secondary">Tillbaka till Scan</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5>Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="ajax-spider-status-container">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Laddar...</span>
+                            </div>
+                            <p>Laddar Ajax Spider status...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5>Statistik</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="ajax-spider-stats-container">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Laddar...</span>
+                            </div>
+                            <p>Laddar statistik...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h5>Upptäckta URL:er</h5>
+            </div>
+            <div class="card-body">
+                <div id="urls-container">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Laddar...</span>
+                    </div>
+                    <p>Laddar URL:er...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const statusContainer = document.getElementById('ajax-spider-status-container');
+        const statsContainer = document.getElementById('ajax-spider-stats-container');
+        const urlsContainer = document.getElementById('urls-container');
+        const refreshBtn = document.getElementById('refresh-btn');
+        
+        // Function to update the page with latest data
+        function updatePage() {
+            // Get Ajax Spider status
+            fetch('/api/ajax-spider/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update status section
+                    let statusHtml = '';
+                    
+                    if (data.error) {
+                        statusHtml = `
+                            <div class="alert alert-danger">
+                                <strong>Error:</strong> ${data.error}
+                            </div>
+                        `;
+                    } else {
+                        const statusBadgeClass = data.running ? 'bg-info' : 'bg-success';
+                        const statusText = data.running ? 'Running' : 'Finished';
+                        
+                        statusHtml = `
+                            <div class="mb-3">
+                                <strong>Status:</strong> 
+                                <span class="badge ${statusBadgeClass}">${statusText}</span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>URLs Found:</strong> ${data.urls_found || 0}
+                            </div>
+                        `;
+                        
+                        // Add control buttons based on status
+                        statusHtml += `
+                            <div class="mt-3">
+                                ${data.running ? 
+                                    `<button id="stop-btn" class="btn btn-warning">
+                                        <i class="bi bi-stop-circle"></i> Stop Scanning
+                                    </button>` : 
+                                    `<button id="restart-btn" class="btn btn-primary">
+                                        <i class="bi bi-play-circle"></i> Restart Scanning
+                                    </button>`
+                                }
+                            </div>
+                        `;
+                    }
+                    
+                    statusContainer.innerHTML = statusHtml;
+                    
+                    // Set up event listeners for the new buttons
+                    if (data.running) {
+                        document.getElementById('stop-btn').addEventListener('click', stopAjaxSpider);
+                    } else {
+                        document.getElementById('restart-btn').addEventListener('click', startAjaxSpider);
+                    }
+                })
+                .catch(error => {
+                    statusContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Error loading status:</strong> ${error.message}
+                        </div>
+                    `;
+                });
+            
+            // Get Ajax Spider results
+            fetch('/api/ajax-spider/results')
+                .then(response => response.json())
+                .then(data => {
+                    // Update statistics section
+                    let statsHtml = '';
+                    
+                    if (data.error) {
+                        statsHtml = `
+                            <div class="alert alert-danger">
+                                <strong>Error:</strong> ${data.error}
+                            </div>
+                        `;
+                    } else {
+                        // Calculate stats from results
+                        const results = data.results || [];
+                        const totalUrls = results.length;
+                        
+                        // Count URLs by HTTP method
+                        const methodCounts = {};
+                        results.forEach(result => {
+                            const method = result.method || 'GET';
+                            methodCounts[method] = (methodCounts[method] || 0) + 1;
+                        });
+                        
+                        // Count URLs with parameters
+                        const urlsWithParams = results.filter(result => 
+                            result.url && result.url.includes('?')).length;
+                        
+                        statsHtml = `
+                            <div class="mb-3">
+                                <strong>Total URLs:</strong> ${totalUrls}
+                            </div>
+                            <div class="mb-3">
+                                <strong>URLs with Parameters:</strong> ${urlsWithParams}
+                            </div>
+                            <div class="mb-3">
+                                <strong>By HTTP Method:</strong>
+                                <ul class="list-group mt-2">
+                        `;
+                        
+                        // Add method counts
+                        for (const [method, count] of Object.entries(methodCounts)) {
+                            statsHtml += `
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    ${method}
+                                    <span class="badge bg-primary rounded-pill">${count}</span>
+                                </li>
+                            `;
+                        }
+                        
+                        statsHtml += `
+                                </ul>
+                            </div>
+                        `;
+                    }
+                    
+                    statsContainer.innerHTML = statsHtml;
+                    
+                    // Update URLs section
+                    let urlsHtml = '';
+                    
+                    if (data.error) {
+                        urlsHtml = `
+                            <div class="alert alert-danger">
+                                <strong>Error:</strong> ${data.error}
+                            </div>
+                        `;
+                    } else {
+                        const results = data.results || [];
+                        
+                        if (results.length === 0) {
+                            urlsHtml = `
+                                <div class="alert alert-info">
+                                    No URLs have been discovered yet.
+                                </div>
+                            `;
+                        } else {
+                            urlsHtml = `
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>URL</th>
+                                                <th>Method</th>
+                                                <th>Status</th>
+                                                <th>Parameters</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                            `;
+                            
+                            // Sort results by URL for better organization
+                            const sortedResults = [...results].sort((a, b) => 
+                                (a.url || '').localeCompare(b.url || ''));
+                            
+                            sortedResults.forEach(result => {
+                                const url = result.url || '';
+                                const method = result.method || 'GET';
+                                const statusCode = result.statusCode || 'N/A';
+                                
+                                // Extract URL parameters if any
+                                let parameters = '';
+                                if (url.includes('?')) {
+                                    const paramsString = url.split('?')[1];
+                                    const params = new URLSearchParams(paramsString);
+                                    parameters = Array.from(params.keys()).join(', ');
+                                }
+                                
+                                // Style status code based on value
+                                let statusClass = '';
+                                if (statusCode >= 200 && statusCode < 300) {
+                                    statusClass = 'text-success';
+                                } else if (statusCode >= 300 && statusCode < 400) {
+                                    statusClass = 'text-info';
+                                } else if (statusCode >= 400) {
+                                    statusClass = 'text-danger';
+                                }
+                                
+                                urlsHtml += `
+                                    <tr>
+                                        <td>
+                                            <div class="text-truncate" style="max-width: 500px;">
+                                                <a href="${url}" target="_blank" title="${url}">
+                                                    ${url}
+                                                </a>
+                                            </div>
+                                        </td>
+                                        <td>${method}</td>
+                                        <td class="${statusClass}">${statusCode}</td>
+                                        <td>${parameters}</td>
+                                    </tr>
+                                `;
+                            });
+                            
+                            urlsHtml += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    urlsContainer.innerHTML = urlsHtml;
+                })
+                .catch(error => {
+                    statsContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Error loading results:</strong> ${error.message}
+                        </div>
+                    `;
+                    
+                    urlsContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Error loading URLs:</strong> ${error.message}
+                        </div>
+                    `;
+                });
+        }
+        
+        // Function to stop Ajax Spider scanning
+        function stopAjaxSpider() {
+            fetch('/api/ajax-spider/stop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error stopping Ajax Spider: ${data.error}`);
+                } else {
+                    alert('Ajax Spider stopped successfully');
+                    updatePage();
+                }
+            })
+            .catch(error => {
+                alert(`Error: ${error.message}`);
+            });
+        }
+        
+        // Function to start Ajax Spider scanning
+        function startAjaxSpider() {
+            // Get target URL from session or prompt user
+            let targetUrl = prompt('Enter target URL for Ajax Spider:', window.targetUrl || '');
+            
+            if (!targetUrl) {
+                return;
+            }
+            
+            fetch('/api/ajax-spider/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    target_url: targetUrl
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error starting Ajax Spider: ${data.error}`);
+                } else {
+                    alert('Ajax Spider started successfully');
+                    updatePage();
+                }
+            })
+            .catch(error => {
+                alert(`Error: ${error.message}`);
+            });
+        }
+        
+        // Initial page update
+        updatePage();
+        
+        // Set up refresh button
+        refreshBtn.addEventListener('click', updatePage);
+        
+        // Auto-refresh every 10 seconds if scanning is active
+        const autoRefreshInterval = setInterval(() => {
+            fetch('/api/ajax-spider/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.running) {
+                        updatePage();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking status for auto-refresh:', error);
+                });
+        }, 10000);
+        
+        // Clean up interval on page unload
+        window.addEventListener('beforeunload', () => {
+            clearInterval(autoRefreshInterval);
+        });
+    });
+</script>
+{% endblock %}

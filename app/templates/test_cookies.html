@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Test Cookies{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">Cookie Test</div>
+    <div class="card-body">
+        <h4>ZAP Status: {{ 'Available' if zap_available else 'Not Available' }}</h4>
+        
+        <h4>Target URL:</h4>
+        <pre>{{ target_url or 'Not set' }}</pre>
+        
+        <h4>Cookies:</h4>
+        <pre>{{ cookies or 'No cookies found' }}</pre>
+        
+        <a href="/session-capture" class="btn btn-primary">Back to Session Capture</a>
+    </div>
+</div>
+{% endblock %}
