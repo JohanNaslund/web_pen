@@ -1,0 +1,30 @@
+# Byte-compiled / cache / __pycache__
+__pycache__/
+*.py[cod]
+*$py.class
+
+#Distribution / packaging
+.Python
+
+venv/
+
+# Flask instance folder
+instance/
+
+# Flask config files (optional, if you use .env or config.py)
+*.env
+*.ini
+config.py
+
+
+
+# Logs
+*.log
+
+# VSCode & IDEs
+.vscode/
+.idea/
+
+# Docker (om du använder det)
+*.pid
+docker-compose.override.yml
