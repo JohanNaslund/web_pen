@@ -51,6 +51,7 @@ report_generator = ReportGenerator(storage_path='./data/reports')
 
 @app.route('/report')
 def report():
+    print("/scan-zap-urls")
     """Rapportvy med förbättrad sårbarhetsvisning"""
     # Kontrollera om det finns ett mål-URL i sessionen
     target_url = session.get('target_url', '')
@@ -70,6 +71,7 @@ def report():
 
 @app.route('/scan-zap-urls')
 def scan_zap_urls():
+    print("/scan-zap-urls")
     """Starta SQL injection-scanning på URL:er hämtade från ZAP"""
     # Kontrollera om ZAP är tillgänglig
     if not zap.is_available():
@@ -97,8 +99,9 @@ def scan_zap_urls():
 
 @app.route('/test-sql-injection')
 def test_sql_injection():
+    print("/test-sql-injection")
     """Testrutt för SQL injection-testern"""
-    target_url = request.args.get('url', 'http://192.168.2.144:3000')
+    target_url = request.args.get('url', 'http://192.168.2.148:3000')
     
     # Lägg till en testparameter om ingen finns
     if '?' not in target_url:
@@ -125,6 +128,7 @@ def test_sql_injection():
 @app.route('/test-zap-api')
 def test_zap_api():
     """Testar ZAP API-anslutningen"""
+    print("/test-zap-api")
     try:
         version = zap.zap.core.version
         sites = zap.zap.core.sites
@@ -142,6 +146,7 @@ def test_zap_api():
 # Lägg till en API-endpoint för att kontrollera ZAP-status
 @app.route('/api/zap-status')
 def api_zap_status():
+    print('/api/zap-status')
     """API-endpoint för att kontrollera ZAP-status"""
     try:
         version = zap.zap.core.version
@@ -162,6 +167,7 @@ report_generator = ReportGenerator(storage_path='./data/reports')
 
 @app.route('/api/extract-cookies', methods=['GET', 'POST'])
 def api_extract_cookies():
+    print("/api/extract-cookies")
     """API-endpoint för cookie-extrahering med förbättrad felhantering"""
     if request.method == 'POST':
         data = request.json
@@ -185,6 +191,7 @@ def api_extract_cookies():
             # Kontrollera ZAP-status först
             if zap.is_available():
                 app.logger.info("ZAP is available, proceeding to get cookies")
+                
                 cookies = zap.get_cookies(target_url)
                 app.logger.info(f"Cookies extraction result: {bool(cookies)}")
             else:
@@ -295,6 +302,7 @@ def target():
 
 @app.route('/session-capture')
 def session_capture():
+    print("/session-capture")   
     """Sessionskaptureringsvy med förenklad session-hantering"""
     target_url = session.get('target_url', '')
     if not target_url:
@@ -406,6 +414,7 @@ def api_zap_mode():
 @app.route('/api/save-session', methods=['POST'])
 def save_session():
     """API-endpoint för att spara en session"""
+    print("/api/save-session")
     if not request.is_json:
         return jsonify({
             'success': False,
@@ -975,6 +984,7 @@ def api_start_scan():
 
 
 def run_scan_in_background(scan_id, target_url):
+    print("def run_scan_in_background")
     """Kör skanning i bakgrunden och uppdatera resultaten"""
     try:
         # Spara status som "running"
@@ -1248,6 +1258,7 @@ def api_scan_status(scan_id):
 
 @app.route('/api/all-scans')
 def api_all_scans():
+    print("/api/all-scans")
     """Hämta lista över alla skanningar"""
     with scan_status_lock:
         # Skapa en kopia av scan_statuses för att undvika konkurrens
@@ -1267,6 +1278,7 @@ def api_all_scans():
 
 @app.route('/api/scan-results/<scan_id>')
 def api_scan_results(scan_id):
+    print("/api/scan-results/<scan_id>")
     """Hämta resultaten från en slutförd skanning"""
     with scan_status_lock:
         status = scan_statuses.get(scan_id)
@@ -1302,6 +1314,7 @@ def api_scan_results(scan_id):
 
 @app.route('/api/cancel-scan/<scan_id>', methods=['POST'])
 def api_cancel_scan(scan_id):
+    print("/api/cancel-scan/<scan_id>")
     """Avbryt en pågående skanning"""
     with scan_status_lock:
         status = scan_statuses.get(scan_id)
@@ -1347,6 +1360,7 @@ def api_cancel_scan(scan_id):
 
 def save_scan_results_to_file(scan_id, results):
     """Spara fullständiga skanningsresultat till fil"""
+    print("def save_scan_results_to_file")
     try:
         results_dir = os.path.join(app.config['RESULTS_DIR'], 'scans')
         os.makedirs(results_dir, exist_ok=True)
@@ -1394,6 +1408,7 @@ def download_report(report_id):
 @app.route('/api/start-sqlmap', methods=['POST'])
 def api_start_sqlmap():
     """API-endpoint för att starta SQL injection-scanning"""
+    print("/api/start-sqlmap")
     try:
         data = request.json
         target_url = data.get('target_url')
@@ -1429,12 +1444,14 @@ def api_start_sqlmap():
 
 @app.route('/api/sqlmap-status/<scan_id>')
 def api_sqlmap_status(scan_id):
+    print("api/sqlmap-status/<scan_id>")
     """API-endpoint för att hämta SQL injection-status"""
     status = sql_tester.get_status(scan_id)
     return jsonify(status)
 
 @app.route('/api/sqlmap-results/<scan_id>')
 def sqlmap_results(scan_id):
+    print("/api/sqlmap-results/<scan_id>")
     """API-endpoint för att hämta SQL injection-resultat"""
     if not scan_id:
         return jsonify({'error': 'No scan ID provided'}), 400
@@ -1450,6 +1467,7 @@ def sqlmap_results(scan_id):
 
 @app.route('/api/debug-zap-cookies')
 def debug_zap_cookies():
+    print("/api/debug-zap-cookies")
     """Debug endpoint for ZAP cookie extraction"""
     target_url = session.get('target_url', '')
     result = {
@@ -1515,6 +1533,7 @@ def debug_zap_cookies():
 
 @app.route('/api/debug-cookies')
 def debug_cookies():
+    print("/api/debug-zap-cookies")
     """Debug-endpoint för cookie-hantering"""
     debug_info = {
         'session_data': {k: session.get(k) for k in session},
@@ -1576,6 +1595,7 @@ def debug_cookies():
 
 @app.route('/test-cookies')
 def test_cookies():
+    print("/test-cookies")
     """Test endpoint för cookies"""
     target_url = session.get('target_url', '')
     cookies = ''
@@ -1595,6 +1615,7 @@ def test_cookies():
 @app.route('/sqlmap-status-file/<scan_id>')
 def sqlmap_status_file(scan_id):
     """Visa status-filen för en SQLMap-scanning"""
+    print("/sqlmap-status-file/<scan_id>")
     status_file = os.path.join(app.config['RESULTS_DIR'], 'sqlmap', scan_id, 'status.json')
     
     if not os.path.exists(status_file):
@@ -1793,6 +1814,7 @@ def api_zap_diagnostic():
 @app.route('/api/scan-from-zap', methods=['POST'])
 def api_scan_from_zap():
     """API-endpoint för att starta SQL injection scan baserat på ZAP-resultat"""
+    print('/api/scan-from-zap')
     try:
         # Hämta parametrar från POST-request (JSON)
         data = request.json

@@ -210,6 +210,7 @@ class ZAPController:
         self.logger.info(f"Extracted domain: {domain}")
         
         # Steg 1: Hämta alla sites
+        
         sites_result = self._direct_api_call('core/view/sites')
         if not sites_result['success']:
             self.logger.warning("Failed to get sites from ZAP")
@@ -236,8 +237,8 @@ class ZAPController:
         # Steg 2: För varje matchande site, hämta meddelanden
         for site in matching_sites:
             self.logger.info(f"Checking messages for site: {site}")
-            
-            messages_result = self._direct_api_call('core/view/messages', {'baseurl': site})
+            params={"count":100}
+            messages_result = self._direct_api_call('core/view/messages', {'baseurl': site}, params)
             if not messages_result['success']:
                 self.logger.warning(f"Failed to get messages for site {site}")
                 continue

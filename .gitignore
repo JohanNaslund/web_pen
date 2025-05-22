@@ -28,3 +28,5 @@ config.py
 # Docker (om du använder det)
 *.pid
 docker-compose.override.yml
+data/
+logs/
