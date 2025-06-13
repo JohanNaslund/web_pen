@@ -337,8 +337,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Generera rekommendationer baserat på sårbarheter
         generateRecommendations(data);
         
-        // Logga datan för felsökning
-        console.log('Processed alert data:', data);
     }
     
     // Ny funktion för att gruppera alerts efter typ och skapa nested accordions
@@ -367,7 +365,6 @@ document.addEventListener('DOMContentLoaded', function() {
             alertsByType[alertName].push(alert);
         });
         
-        console.log(`${riskLevel} alerts grouped by type:`, alertsByType);
         
         // Skapa accordion items för varje alert-typ
         Object.keys(alertsByType).forEach((alertName, index) => {

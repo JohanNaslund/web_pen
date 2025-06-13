@@ -21,7 +21,7 @@ import requests, psutil
 import urllib.parse
 import traceback
 
-from modules.sql_injection_tester import SQLInjectionTester
+#from modules.sql_injection_tester import SQLInjectionTester
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # För sessionshantering
@@ -45,9 +45,9 @@ print(f"ZAPController initialized: {zap}")
 print(f"ZAP available: {zap.is_available()}")
 #print(f"ZAP version: {zap.core.version if zap.is_available() else 'N/A'}")
 
-sql_tester = SQLInjectionTester(storage_path='./data/sql_tester')
+'''sql_tester = SQLInjectionTester(storage_path='./data/sql_tester')'''
 session_manager = SessionManager(storage_path='./data/sessions')
-report_generator = ReportGenerator(storage_path='./data/reports')
+'''report_generator = ReportGenerator(storage_path='./data/reports')'''
 
 @app.route('/report')
 def report():
@@ -68,62 +68,6 @@ def report():
         target_url=target_url,
         debug_mode=False  # Pass this explicitly
     )
-
-@app.route('/scan-zap-urls')
-def scan_zap_urls():
-    print("/scan-zap-urls")
-    """Starta SQL injection-scanning på URL:er hämtade från ZAP"""
-    # Kontrollera om ZAP är tillgänglig
-    if not zap.is_available():
-        return jsonify({'error': 'ZAP is not available'}), 500
-    
-    # Få målsite från parametrar (valfritt)
-    target_site = request.args.get('site')
-    
-    # Få max-url-parametern (valfritt, standard är 50)
-    max_urls = int(request.args.get('max', 50))
-    
-    # Få sessionscookies om tillgängliga
-    session_name = request.args.get('session')
-    cookies = None
-    
-    if session_name:
-        session_data = session_manager.load_cookies(session_name)
-        if session_data:
-            cookies = session_data.get('cookies')
-    
-    # Starta scanningen från ZAP-data
-    result = sql_tester.scan_from_zap_results(zap, target_site, max_urls, cookies)
-    
-    return jsonify(result)
-
-@app.route('/test-sql-injection')
-def test_sql_injection():
-    print("/test-sql-injection")
-    """Testrutt för SQL injection-testern"""
-    target_url = request.args.get('url', 'http://192.168.2.148:3000')
-    
-    # Lägg till en testparameter om ingen finns
-    if '?' not in target_url:
-        target_url = target_url + '?id=1'
-    
-    # Starta en testscanning
-    result = sql_tester.start_scan(target_url)
-    scan_id = result.get('scan_id')
-    
-    # Vänta kort stund för att låta scanningen börja
-    time.sleep(2)
-    
-    # Hämta status
-    status = sql_tester.get_status(scan_id)
-    
-    return jsonify({
-        'start_result': result,
-        'status': status,
-        'note': 'Scanning körs i bakgrunden. Använd /api/sqlmap-status/{} för att kontrollera status.'.format(scan_id),
-        'debug_url': f'/sql-debug/{scan_id}',
-        'results_url': f'/api/sqlmap-results/{scan_id}'
-    })
 
 @app.route('/test-zap-api')
 def test_zap_api():
@@ -160,85 +104,15 @@ def api_zap_status():
             'error': str(e)
         }), 500
 
-session_manager = SessionManager(storage_path='./data/sessions')
-report_generator = ReportGenerator(storage_path='./data/reports')
 
-
-
-@app.route('/api/extract-cookies', methods=['GET', 'POST'])
-def api_extract_cookies():
-    print("/api/extract-cookies")
-    """API-endpoint för cookie-extrahering med förbättrad felhantering"""
-    if request.method == 'POST':
-        data = request.json
-        cookies = data.get('cookies', '')
-    else:
-        # För GET-förfrågningar, försök hämta cookies från ZAP
-        target_url = session.get('target_url', '')
-        cookies = ''
-        
-        if not target_url:
-            return jsonify({
-                'success': False,
-                'error': 'No target URL in session'
-            }), 400
-        
-        # Försök hämta cookies
-        try:
-            # Logga försöket
-            app.logger.info(f"Attempting to extract cookies for URL: {target_url}")
-            
-            # Kontrollera ZAP-status först
-            if zap.is_available():
-                app.logger.info("ZAP is available, proceeding to get cookies")
-                
-                cookies = zap.get_cookies(target_url)
-                app.logger.info(f"Cookies extraction result: {bool(cookies)}")
-            else:
-                app.logger.warning("ZAP is not available")
-                return jsonify({
-                    'success': False,
-                    'error': 'ZAP is not available',
-                    'zap_status': 'unavailable'
-                }), 503
-        except Exception as e:
-            app.logger.error(f"Exception during cookie extraction: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f'Error: {str(e)}'
-            }), 500
     
-    return jsonify({
-        'success': True,
-        'cookies': cookies
-    })
-
 # Uppdatera app.py för att inkludera statiska filer
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
 
-# Se till att den här metoden läggs till i ReportGenerator-klassen
-"""
-def get_report(self, report_id):
-    # Hämta rapportinnehåll
-    report_path = self.get_report_path(report_id)
-    
-    if not os.path.exists(report_path):
-        return None
-        
-    with open(report_path, 'r') as f:
-        report_data = json.load(f)
-        
-    return report_data
-"""
 
-@app.route('/')
-def index():
-    """Dashboard-sida"""
-    return render_template('index.html')
-
-@app.route('/target', methods=['GET', 'POST'])
+@app.route('/', methods=['GET', 'POST'])
 def target():
     """Målkonfiguration med förbättrad scope-hantering"""
     if request.method == 'POST':
@@ -410,68 +284,6 @@ def api_zap_mode():
             'current_mode': 'unknown'
         }), 500
 
-
-@app.route('/api/save-session', methods=['POST'])
-def save_session():
-    """API-endpoint för att spara en session"""
-    print("/api/save-session")
-    if not request.is_json:
-        return jsonify({
-            'success': False,
-            'error': 'Invalid content type, expected application/json'
-        }), 400
-    
-    data = request.json
-    
-    # Validera obligatoriska fält
-    if not data.get('session_name'):
-        return jsonify({
-            'success': False,
-            'error': 'Session name is required'
-        }), 400
-    
-    if not data.get('cookies'):
-        return jsonify({
-            'success': False,
-            'error': 'Cookies data is required'
-        }), 400
-    
-    cookies = data.get('cookies', '')
-    session_name = data.get('session_name', f"session_{int(time.time())}")
-    target_url = session.get('target_url')
-    
-    # Validera att target_url finns
-    if not target_url:
-        return jsonify({
-            'success': False,
-            'error': 'No target URL in session'
-        }), 400
-    
-    try:
-        # Logga input-data för felsökning
-        print(f"Saving session with name: {session_name}")
-        print(f"Target URL: {target_url}")
-        print(f"Cookies (first 50 chars): {cookies[:50]}...")
-        
-        # Försök spara sessionen
-        success = session_manager.save_cookies(session_name, target_url, cookies)
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'session_name': session_name
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to save session'
-            }), 500
-    except Exception as e:
-        print(f"Error saving session: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'Exception: {str(e)}'
-        }), 500
 
 
 def get_spider_status_direct(scan_id):
@@ -955,93 +767,7 @@ def setup_zap_session_with_cookies(target_url, cookies_str):
         return False
     
 
-@app.route('/api/start-scan', methods=['POST'])
-def api_start_scan():
-    """API-endpoint för att starta skanning asynkront"""
-    data = request.json
-    target_url = data.get('target_url')
-    
-    if not target_url:
-        return jsonify({'error': 'No target URL specified'}), 400
-    
-    # Generera ett unikt ID för denna skanning
-    scan_id = str(uuid.uuid4())
-    
-    # Starta skanning i en bakgrundstråd
-    thread = threading.Thread(
-        target=run_scan_in_background,
-        args=(scan_id, target_url)
-    )
-    thread.daemon = True
-    thread.start()
-    
-    return jsonify({
-        'status': 'started',
-        'scan_id': scan_id
-    })
 
-
-
-
-def run_scan_in_background(scan_id, target_url):
-    print("def run_scan_in_background")
-    """Kör skanning i bakgrunden och uppdatera resultaten"""
-    try:
-        # Spara status som "running"
-        with scan_status_lock:
-            scan_statuses[scan_id] = {
-                'status': 'running',
-                'progress': 0,
-                'start_time': time.time(),
-                'target_url': target_url
-            }
-        
-        # Kör progressiv skanning
-        result = zap.start_progressive_scan(target_url)
-        
-        # Spara initiala resultat
-        with scan_status_lock:
-            scan_statuses[scan_id].update({
-                'progress': 10,
-                'spider_id': result.get('spider_id'),
-                'ascan_id': result.get('ascan_id'),
-                'strategy': result.get('strategy')
-            })
-        
-        # Övervaka framsteg
-        if 'ascan_id' in result:
-            ascan_id = result['ascan_id']
-            while int(zap.zap.ascan.status(ascan_id)) < 100:
-                progress = int(zap.zap.ascan.status(ascan_id))
-                with scan_status_lock:
-                    scan_statuses[scan_id]['progress'] = 10 + (progress * 0.9)  # 10% till 100%
-                time.sleep(5)
-        
-        # Skanning klar
-        with scan_status_lock:
-            scan_statuses[scan_id].update({
-                'status': 'completed',
-                'progress': 100,
-                'completion_time': time.time()
-            })
-            
-        # Hämta och spara resultat
-        alerts = zap.get_alerts()
-        
-        with scan_status_lock:
-            scan_statuses[scan_id]['alerts'] = len(alerts)
-            scan_statuses[scan_id]['results'] = alerts[:10]  # Bara de 10 första för snabb åtkomst
-        
-        # Spara fullständiga resultat till fil
-        save_scan_results_to_file(scan_id, alerts)
-            
-    except Exception as e:
-        # Fel vid skanning
-        with scan_status_lock:
-            scan_statuses[scan_id].update({
-                'status': 'error',
-                'error': str(e)
-            })
 
 @app.route('/api/scan-status')
 def scan_status():
@@ -1115,7 +841,7 @@ def scan_status():
                 
                 # Uppdatera sessionen baserat på status
                 session['ajax_spider_running'] = running
-            
+            '''
             # Kontrollera SQLMap status om vi har ett scan_id
             if 'sqlmap_scan_id' in session:
                 try:
@@ -1124,7 +850,7 @@ def scan_status():
                 except Exception as e:
                     print(f"Error getting SQLMap status: {str(e)}")
                     status['sqlmap'] = {'error': str(e)}
-            
+            '''
         except Exception as e:
             print(f"Error retrieving scan status: {str(e)}")
             status['error'] = str(e)
@@ -1374,95 +1100,6 @@ def save_scan_results_to_file(scan_id, results):
     except Exception as e:
         print(f"Error saving scan results: {str(e)}")
 
-@app.route('/api/download-report/<report_id>')
-def download_report(report_id):
-    """Hämta en genererad rapport"""
-    report_path = report_generator.get_report_path(report_id)
-    
-    if os.path.exists(report_path):
-        try:
-            with open(report_path, 'r') as f:
-                report_data = json.load(f)
-                
-            # Bearbeta data för bättre presentation
-            if 'sqlmap_results' in report_data:
-                for i, result in enumerate(report_data['sqlmap_results']):
-                    # Extrahera sårbarheter från loggutdrag
-                    if 'log_excerpt' in result:
-                        vulnerabilities = []
-                        for line in result['log_excerpt'].split('\n'):
-                            if '[INFO]' in line and ('is vulnerable' in line or 'vulnerability' in line):
-                                vulnerabilities.append(line)
-                        
-                        if vulnerabilities:
-                            report_data['sqlmap_results'][i]['vulnerabilities_found'] = vulnerabilities
-            
-            return jsonify(report_data)
-        except Exception as e:
-            return jsonify({'error': f'Error parsing report file: {str(e)}'}), 500
-    
-    return jsonify({'error': 'Report not found'}), 404
-
-
-
-@app.route('/api/start-sqlmap', methods=['POST'])
-def api_start_sqlmap():
-    """API-endpoint för att starta SQL injection-scanning"""
-    print("/api/start-sqlmap")
-    try:
-        data = request.json
-        target_url = data.get('target_url')
-        session_name = data.get('session_name')
-        
-        if not target_url:
-            return jsonify({'error': 'Inget mål-URL angivet'}), 400
-            
-        cookies = None
-        if session_name:
-            session_data = session_manager.load_cookies(session_name)
-            if session_data:
-                cookies = session_data.get('cookies')
-        
-        # Starta scanning med vår nya tester
-        result = sql_tester.start_scan(target_url, cookies)
-        
-        # Spara scan_id i sessionen om scanningen startades
-        if result.get('status') == 'started':
-            session['sqlmap_scan_id'] = result['scan_id']
-            return jsonify(result)
-        else:
-            return jsonify({
-                'status': 'error',
-                'error': result.get('error', 'Okänt fel vid start av SQL test')
-            }), 500
-    except Exception as e:
-        print(f"Error starting SQL injection scan: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'error': str(e)
-        }), 500
-
-@app.route('/api/sqlmap-status/<scan_id>')
-def api_sqlmap_status(scan_id):
-    print("api/sqlmap-status/<scan_id>")
-    """API-endpoint för att hämta SQL injection-status"""
-    status = sql_tester.get_status(scan_id)
-    return jsonify(status)
-
-@app.route('/api/sqlmap-results/<scan_id>')
-def sqlmap_results(scan_id):
-    print("/api/sqlmap-results/<scan_id>")
-    """API-endpoint för att hämta SQL injection-resultat"""
-    if not scan_id:
-        return jsonify({'error': 'No scan ID provided'}), 400
-        
-    results = sql_tester.get_results(scan_id)
-    summary = sql_tester.get_summary(scan_id)
-    
-    return jsonify({
-        'results': results,
-        'summary': summary
-    })
 
 
 @app.route('/api/debug-zap-cookies')
@@ -1811,293 +1448,18 @@ def api_zap_diagnostic():
     return jsonify(result)
 
 
-@app.route('/api/scan-from-zap', methods=['POST'])
-def api_scan_from_zap():
-    """API-endpoint för att starta SQL injection scan baserat på ZAP-resultat"""
-    print('/api/scan-from-zap')
-    try:
-        # Hämta parametrar från POST-request (JSON)
-        data = request.json
-        target_site = data.get('target_site')
-        max_urls = int(data.get('max_urls', 50))
-        session_name = data.get('session_name')
-        
-        # Logga begäran för felsökning
-        app.logger.info(f"Received scan-from-zap request: target={target_site}, max_urls={max_urls}, session={session_name}")
-        
-        # Hämta cookies om en session angavs
-        cookies = None
-        if session_name:
-            session_data = session_manager.load_cookies(session_name)
-            if session_data:
-                cookies = session_data.get('cookies')
-                app.logger.info(f"Loaded cookies from session '{session_name}', cookie length: {len(cookies) if cookies else 0}")
-                app.logger.debug(f"Cookie content (first 100 chars): {cookies[:100] if cookies else 'None'}")
-            else:
-                app.logger.warning(f"No session data found for '{session_name}'")
-                
-        # Kontrollera ZAP-status
-        if not zap.is_available():
-            app.logger.error("ZAP is not available for scan-from-zap")
-            return jsonify({
-                'error': 'ZAP is not available. Please check connection.',
-                'status': 'failed'
-            }), 500
-        
-        # Dummy-scanning - använda alltid SQL Injection Tester direkt utan ZAP sites
-        if target_site:
-            # Skapa ett manuellt test baserat på målsidan
-            # Detta är en fallback om ZAP-integrationen inte fungerar
-            try:
-                app.logger.info(f"Starting direct SQL injection test for {target_site}")
-                scan_id = sql_tester._generate_scan_id()
-                scan_dir = os.path.join(sql_tester.storage_path, scan_id)
-                os.makedirs(scan_dir, exist_ok=True)
-                
-                # Spara information om skanningen
-                scan_info = {
-                    'scan_id': scan_id,
-                    'target_url': target_site,
-                    'start_time': time.time(),
-                    'status': 'running',
-                    'cookies_used': cookies is not None,
-                    'direct_test': True
-                }
-                
-                with open(os.path.join(scan_dir, 'info.json'), 'w') as f:
-                    json.dump(scan_info, f, indent=2)
-                
-                # Starta direktskanning i bakgrunden
-                threading.Thread(
-                    target=sql_tester._run_direct_scan,
-                    args=(scan_id, target_site, cookies)
-                ).start()
-                
-                session['sql_zap_scan_id'] = scan_id
-                
-                return jsonify({
-                    'scan_id': scan_id,
-                    'status': 'started',
-                    'direct_test': True,
-                    'message': 'Starting direct SQL injection test without ZAP integration'
-                })
-            except Exception as direct_e:
-                app.logger.error(f"Error in direct testing: {str(direct_e)}", exc_info=True)
-                # Fall tillbaka till ZAP-test om direkt test misslyckas
-                pass
-            
-        try:
-            # Logga ZAP-status och sites
-            app.logger.info(f"ZAP is available, version: {zap.zap.core.version}")
-            sites = zap.zap.core.sites
-            app.logger.info(f"Found {len(sites)} sites in ZAP: {', '.join(sites)}")
-                
-            # Starta scanning baserat på ZAP-data
-            result = sql_tester.scan_from_zap_results(zap, target_site, max_urls, cookies)
-            
-            # Logga resultatet
-            app.logger.info(f"Scan-from-zap result: {result}")
-            
-            # Om scanning startades framgångsrikt, spara scan_id i sessionen
-            if result.get('status') == 'started':
-                session['sql_zap_scan_id'] = result['scan_id']
-                
-            return jsonify(result)
-        except Exception as zap_e:
-            app.logger.error(f"Error in ZAP-based testing: {str(zap_e)}", exc_info=True)
-            return jsonify({
-                'error': f"Error in ZAP-based test: {str(zap_e)}",
-                'status': 'error'
-            }), 500
-    except Exception as e:
-        app.logger.error(f"Error in scan-from-zap: {str(e)}", exc_info=True)
-        return jsonify({
-            'error': str(e),
-            'status': 'error'
-        }), 500
-
-@app.route('/api/sql-zap-status/<scan_id>')
-def api_sql_zap_status(scan_id):
-    """API-endpoint för att hämta status för SQL injection scan baserat på ZAP-data"""
-    status = sql_tester.get_status(scan_id)
-    return jsonify(status)
-
-@app.route('/api/sql-zap-results/<scan_id>')
-def api_sql_zap_results(scan_id):
-    """API-endpoint för att hämta resultat från SQL injection scan baserat på ZAP-data"""
-    if not scan_id:
-        return jsonify({'error': 'No scan ID provided'}), 400
-        
-    results = sql_tester.get_results(scan_id)
-    
-    # Använd den förbättrade sammanfattningsmetoden
-    try:
-        summary = sql_tester.get_enhanced_summary(scan_id)
-    except Exception as e:
-        # Fallback till den ursprungliga sammanfattningsmetoden om den förbättrade misslyckas
-        print(f"Error using enhanced summary, falling back to standard: {str(e)}")
-        summary = sql_tester.get_summary(scan_id)
-    
-    return jsonify({
-        'results': results,
-        'summary': summary
-    })
-
-@app.route('/view-log')
-def view_log():
-    """Visar innehållet i en loggfil"""
-    log_file = request.args.get('file')
-    
-    if not log_file or '..' in log_file:  # Enkel säkerhetskontroll
-        return jsonify({'error': 'Invalid log file'}), 400
-    
-    log_path = os.path.join('./logs/sql_injection', log_file)
-    
-    if not os.path.exists(log_path):
-        return jsonify({'error': 'Log file not found'}), 404
-    
-    try:
-        with open(log_path, 'r') as f:
-            log_content = f.read()
-        
-        # Returnera loggfilen som HTML med formatering
-        return render_template('view_log.html', 
-                               log_file=log_file,
-                               log_content=log_content)
-    except Exception as e:
-        return jsonify({'error': f'Error reading log file: {str(e)}'}), 500
-
-@app.route('/logs')
-def logs_list():
-    """Visar en lista över alla tillgängliga loggfiler"""
-    return render_template('logs.html')
-
-
-
-@app.route('/api/log-files')
-def api_log_files():
-    """API-endpoint för att lista alla SQL Injection loggfiler"""
-    log_dir = './logs/sql_injection'
-    
-    try:
-        # Kontrollera om katalogen finns
-        if not os.path.exists(log_dir):
-            return jsonify({'files': []})
-        
-        # Lista alla .log filer i katalogen
-        files = []
-        for file in os.listdir(log_dir):
-            if file.endswith('.log'):
-                file_path = os.path.join(log_dir, file)
-                files.append({
-                    'name': file,
-                    'size': os.path.getsize(file_path),
-                    'created': os.path.getctime(file_path),
-                    'url': f'/view-log?file={file}'
-                })
-        
-        # Sortera filer efter skapande-tid (nyast först)
-        files.sort(key=lambda x: x['created'], reverse=True)
-        
-        return jsonify({'files': files})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/sql-scan-details/<scan_id>')
-def api_sql_scan_details(scan_id):
-    """API-endpoint för att få detaljerad information om en SQL injection scanning"""
-    try:
-        # Hämta statusfilen
-        scan_dir = os.path.join(app.config['RESULTS_DIR'], 'sql_tester', scan_id)
-        status_file = os.path.join(scan_dir, 'info.json')
-        
-        if not os.path.exists(status_file):
-            return jsonify({
-                'error': 'Scan not found',
-                'scan_id': scan_id
-            }), 404
-            
-        with open(status_file, 'r') as f:
-            status_data = json.load(f)
-            
-        # Hämta resultatfilen om scanningen är klar
-        results = []
-        if status_data.get('status') == 'completed':
-            results_file = os.path.join(scan_dir, 'results.json')
-            
-            if os.path.exists(results_file):
-                with open(results_file, 'r') as f:
-                    results = json.load(f)
-        
-        # Hämta eventuell loggfil
-        log_dir = './logs/sql_injection'
-        log_files = []
-        
-        if os.path.exists(log_dir):
-            for file in os.listdir(log_dir):
-                if file.endswith('.log'):
-                    # Öppna och läs loggfilen för att se om den innehåller scan_id
-                    log_path = os.path.join(log_dir, file)
-                    try:
-                        with open(log_path, 'r') as f:
-                            log_content = f.read()
-                            if scan_id in log_content:
-                                log_files.append({
-                                    'name': file,
-                                    'url': f'/view-log?file={file}'
-                                })
-                    except:
-                        pass
-        
-        # Sammanställ detaljerad info
-        details = {
-            'scan_id': scan_id,
-            'status': status_data,
-            'results_count': len(results),
-            'logs': log_files,
-            'urls_processed': status_data.get('processed_urls', 0),
-            'urls_total': status_data.get('total_urls', 0),
-            'progress_percent': status_data.get('progress_percent', 0),
-            'start_time': status_data.get('start_time'),
-            'duration': status_data.get('end_time', time.time()) - status_data.get('start_time', time.time()) if status_data.get('start_time') else 0
-        }
-        
-        # Samla de senaste resultaten (upp till 10 st)
-        if results:
-            details['latest_findings'] = results[-10:] if len(results) > 10 else results
-        
-        return jsonify(details)
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'scan_id': scan_id
-        }), 500
-
-@app.route('/scan-details/<scan_id>')
-def scan_details(scan_id):
-    """Visa detaljerad information om en SQL injection scanning"""
-    
-    # Kontrollera att scanningen finns
-    scan_dir = os.path.join(app.config['RESULTS_DIR'], 'sql_tester', scan_id)
-    if not os.path.exists(scan_dir):
-        flash('Scanning med angivet ID hittades inte.', 'danger')
-        return redirect(url_for('scan'))
-    
-    return render_template('scan_details.html', scan_id=scan_id)
 @app.route('/api/reset-zap', methods=['POST'])
 def api_reset_zap():
     """Reset ZAP och skapa ny session med korrekt scope"""
     try:
         app.logger.info("Starting complete reset (ZAP and application session)...")
         target_url = session.get('target_url', '')
-        
-        # Reset ZAP using the existing functionality
+
+        alerts_result = _zap_api_call('core/action/deleteAllAlerts')        
         zap_reset_result = _zap_api_call('core/action/newSession', {
             'name': 'session',
             'overwrite': 'true'
-        }, timeout=10)
-        
-        # Clear alerts
+        }, timeout=20)
         alerts_result = _zap_api_call('core/action/deleteAllAlerts')
         
         # Clear the Flask session but remember target URL if set
@@ -2280,30 +1642,6 @@ def _zap_api_call(endpoint, params=None, timeout=5):
         }
 
 
-
-@app.route('/test-sql-injection-url')
-def test_sql_injection_url():
-    """Starta SQL injection-test för en specifik URL"""
-    url = request.args.get('url')
-    
-    if not url:
-        return jsonify({'error': 'URL parameter saknas'}), 400
-    
-    # Starta scanning
-    try:
-        result = sql_tester.start_scan(url)
-        
-        return jsonify({
-            'status': 'started',
-            'scan_id': result.get('scan_id'),
-            'message': f'SQL injection-testning startad för {url}',
-            'progress_url': f'/api/sqlmap-status/{result.get("scan_id")}'
-        })
-    except Exception as e:
-        return jsonify({
-            'error': f'Kunde inte starta SQL injection-test: {str(e)}'
-        }), 500
-
 def _direct_api_call(endpoint, params=None, timeout=15):
     """Perform a direct HTTP API call to ZAP with better error handling"""
     if params is None:
@@ -2353,6 +1691,8 @@ def _direct_api_call(endpoint, params=None, timeout=15):
             'success': False,
             'error': str(e)
         }
+
+
 
 @app.route('/api/ajax-spider/start', methods=['POST'])
 def api_ajax_spider_start():

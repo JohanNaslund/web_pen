@@ -1196,3 +1196,147 @@
             return ""
         
 
+    def _direct_api_call(self, endpoint, params=None, timeout=10):
+        """Utför ett direkt HTTP-anrop till ZAP API"""
+        try:
+            import requests
+            
+            if params is None:
+                params = {}
+                
+            # Lägg alltid till API-nyckeln
+            params['apikey'] = self.api_key
+            
+            # Konstruera fullständig URL
+            url = f"http://{self.host}:{self.port}/JSON/{endpoint}/"
+            
+            self.logger.debug(f"Making direct API call to: {url}")
+            
+            # Gör HTTP-anropet
+            response = requests.get(url, params=params, timeout=timeout)
+            
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    'data': response.json()
+                }
+            else:
+                self.logger.warning(f"API call to {endpoint} failed with status {response.status_code}")
+                return {
+                    'success': False,
+                    'status_code': response.status_code,
+                    'response': response.text
+                }
+        except Exception as e:
+            self.logger.error(f"Error in direct API call to {endpoint}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        
+    def check_and_stop_timeouts(self):
+        """Kontrollera och stoppa skanningar som kört för länge"""
+        now = time.time()
+        for scan_id, scan_info in list(self.active_scans.items()):
+            duration = now - scan_info.get('start_time', now)
+            max_duration = scan_info.get('max_duration', float('inf'))
+            
+            if duration > max_duration:
+                print(f"Skanning {scan_id} har kört i {duration:.1f} sekunder och avbryts")
+                
+                if scan_info['type'] == 'spider':
+                    self.zap.spider.stop(scan_id)
+                elif scan_info['type'] == 'ascan':
+                    self.zap.ascan.stop(scan_id)
+                    
+                del self.active_scans[scan_id]    
+
+    def start_progressive_scan(self, target_url, session_cookies=None):
+        """Starta en progressiv skanning som ökar djupet bara vid behov"""
+        self.logger.info(f"Starting progressive scan for {target_url}")
+        
+        try:
+            # Steg 1: Kör en snabb spider för att få bättre förståelse
+            spider_result = self._direct_api_call('spider/action/scan', {'url': target_url})
+            
+            if not spider_result['success']:
+                self.logger.error(f"Failed to start spider: {spider_result.get('response', 'Unknown error')}")
+                return {'error': 'Failed to start spider scan'}
+                
+            spider_id = spider_result['data'].get('scan')
+            self.logger.info(f"Started spider scan with ID: {spider_id}")
+            
+            # Vänta på att spider-scanningen ska bli klar (med timeout)
+            max_wait = 60  # sekunder
+            start_time = time.time()
+            
+            while True:
+                status_result = self._direct_api_call('spider/view/status', {'scanId': spider_id})
+                
+                if not status_result['success']:
+                    self.logger.error(f"Failed to get spider status: {status_result.get('response', 'Unknown error')}")
+                    break
+                    
+                status = int(status_result['data'].get('status', '0'))
+                
+                if status >= 100:  # Klar
+                    break
+                    
+                if time.time() - start_time > max_wait:
+                    self.logger.warning("Spider timeout, continuing with partial results")
+                    break
+                    
+                time.sleep(2)
+            
+            # Steg 2: Analysera resultaten för att avgöra om vi behöver köra aktiv skanning
+            results_result = self._direct_api_call('spider/view/results', {'scanId': spider_id})
+            
+            if not results_result['success']:
+                self.logger.error(f"Failed to get spider results: {results_result.get('response', 'Unknown error')}")
+                findings = 0
+            else:
+                findings = len(results_result['data'].get('results', []))
+                
+            self.logger.info(f"Spider found {findings} URLs")
+            
+            # Om vi hittade innehåll, kör en begränsad aktiv skanning
+            if findings > 0:
+                self.logger.info(f"Starting limited active scan for {target_url}")
+                
+                # Förbered parametrar
+                params = {'url': target_url}
+                
+                # Lägg till kontext om vi har cookies
+                if session_cookies:
+                    context_id = self._create_context_with_session(target_url, session_cookies)
+                    params['contextId'] = context_id
+                
+                # Starta aktiv scanning
+                ascan_result = self._direct_api_call('ascan/action/scan', params)
+                
+                if not ascan_result['success']:
+                    self.logger.error(f"Failed to start active scan: {ascan_result.get('response', 'Unknown error')}")
+                    return {
+                        'spider_id': spider_id,
+                        'strategy': 'spider_only',
+                        'error': 'Failed to start active scan'
+                    }
+                    
+                ascan_id = ascan_result['data'].get('scan')
+                
+                return {
+                    'spider_id': spider_id,
+                    'ascan_id': ascan_id,
+                    'strategy': 'progressive'
+                }
+            else:
+                # Om vi inte hittade mycket, returnera bara spider-resultaten
+                return {
+                    'spider_id': spider_id,
+                    'strategy': 'spider_only'
+                }
+        except Exception as e:
+            self.logger.error(f"Error in progressive scan: {str(e)}")
+            return {
+                'error': str(e)
+            }
