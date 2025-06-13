@@ -111,10 +111,9 @@ def api_zap_status():
 def send_static(path):
     return send_from_directory('static', path)
 
-
 @app.route('/', methods=['GET', 'POST'])
 def target():
-    """Målkonfiguration med förbättrad scope-hantering"""
+    """Målkonfiguration med automatisk ZAP-reset och förbättrad scope-hantering"""
     if request.method == 'POST':
         target_url = request.form.get('target_url')
         scan_type = request.form.get('scan_type', 'standard')
@@ -129,7 +128,40 @@ def target():
         if not target_url.startswith(('http://', 'https://')):
             target_url = 'http://' + target_url
         
-        # Spara måldetaljer i sessionen
+        # AUTOMATISK ZAP RESET - Rensa all gammal data innan vi sätter upp nytt target
+        try:
+            app.logger.info("Starting automatic ZAP reset for new target...")
+            
+            # Rensa alerts
+            alerts_result = _zap_api_call('core/action/deleteAllAlerts')
+            if not alerts_result['success']:
+                app.logger.warning(f"Failed to delete alerts: {alerts_result.get('response', 'Unknown error')}")
+            
+            # Skapa ny ZAP session (detta rensar all historik och data)
+            zap_reset_result = _zap_api_call('core/action/newSession', {
+                'name': 'session',
+                'overwrite': 'true'
+            }, timeout=20)
+            
+            if not zap_reset_result['success']:
+                app.logger.warning(f"Failed to create new ZAP session: {zap_reset_result.get('response', 'Unknown error')}")
+            else:
+                app.logger.info("ZAP session reset successful")
+            
+            # Rensa alerts igen efter ny session
+            alerts_result = _zap_api_call('core/action/deleteAllAlerts')
+            
+            # Rensa Flask session men behåll vissa värden
+            old_target_url = session.get('target_url', '')
+            session.clear()
+            
+            app.logger.info(f"ZAP reset completed. Old target: {old_target_url}, New target: {target_url}")
+            
+        except Exception as e:
+            app.logger.error(f"Error during ZAP reset: {str(e)}")
+            flash(f'Varning: Kunde inte rensa ZAP data helt: {str(e)}', 'warning')
+        
+        # Spara nya måldetaljer i sessionen
         session['target_url'] = target_url
         session['scan_type'] = scan_type
         session['zap_mode'] = zap_mode
@@ -139,37 +171,64 @@ def target():
         parsed_url = urlparse(target_url)
         domain = parsed_url.netloc
         
-        # Om ZAP är tillgänglig, konfigurera ZAP-läge och scope
+        # Om ZAP är tillgänglig, konfigurera ZAP-läge och scope för det nya target:et
         if zap.is_available():
-            # Set ZAP mode
-            success = zap.set_mode(zap_mode)
-            if success:
-                flash(f"ZAP-läge inställt på: {zap_mode.upper()}", "info")
-            
-            # Skapa ett nytt context för vår target
-            context_name = "Target Context"
-            context_result = _direct_api_call('context/action/newContext', {
-                'contextName': context_name
-            })
-            
-            if context_result['success']:
-                # Sätt scope för denna domän (inkludera allt på domänen)
-                include_pattern = f".*{domain}.*"
-                include_result = _direct_api_call('context/action/includeInContext', {
-                    'contextName': context_name,
-                    'regex': include_pattern
+            try:
+                # Set ZAP mode
+                success = zap.set_mode(zap_mode)
+                if success:
+                    flash(f"ZAP-läge inställt på: {zap_mode.upper()}", "info")
+                    app.logger.info(f"ZAP mode set to: {zap_mode}")
+                else:
+                    flash(f"Kunde inte ställa in ZAP-läge på: {zap_mode.upper()}", "warning")
+                
+                # Skapa ett nytt context för vårt nya target
+                context_name = "Target Context"
+                context_result = _zap_api_call('context/action/newContext', {
+                    'contextName': context_name
                 })
                 
-                if include_result['success']:
-                    flash(f"Context scope satt till: {domain}", "info")
+                if context_result['success']:
+                    app.logger.info(f"Created new context: {context_name}")
+                    
+                    # Sätt scope för denna domän (inkludera allt på domänen)
+                    include_pattern = f".*{re.escape(domain)}.*"
+                    include_result = _zap_api_call('context/action/includeInContext', {
+                        'contextName': context_name,
+                        'regex': include_pattern
+                    })
+                    
+                    if include_result['success']:
+                        flash(f"Context scope satt till: {domain}", "info")
+                        app.logger.info(f"Set context scope to include: {include_pattern}")
+                    else:
+                        flash("Kunde inte sätta context scope", "warning")
+                        app.logger.warning(f"Failed to set context scope: {include_result.get('response', 'Unknown error')}")
                 else:
-                    flash("Kunde inte sätta context scope", "warning")
-            else:
-                flash("Kunde inte skapa context", "warning")
+                    flash("Kunde inte skapa context", "warning")
+                    app.logger.warning(f"Failed to create context: {context_result.get('response', 'Unknown error')}")
+                
+                # Skapa en default HTTP session i ZAP för det nya target:et
+                session_result = _zap_api_call('httpSessions/action/createEmptySession', {
+                    'site': target_url,
+                    'session': 'Session 1'
+                })
+                
+                if session_result['success']:
+                    session['zap_session_name'] = 'Session 1'
+                    flash("Session 'Session 1' skapad automatiskt för det nya target:et", "info")
+                    app.logger.info("Created default HTTP session: Session 1")
+                else:
+                    flash("Kunde inte skapa standardsession. Du kan skapa en manuellt.", "warning")
+                    app.logger.warning(f"Failed to create HTTP session: {session_result.get('response', 'Unknown error')}")
+                    
+            except Exception as e:
+                app.logger.error(f"Error configuring ZAP for new target: {str(e)}")
+                flash(f"Fel vid konfiguration av ZAP: {str(e)}", "warning")
         else:
             flash("ZAP är inte tillgänglig, läge och scope kunde inte ställas in", "warning")
         
-        flash(f'Mål konfigurerat: {target_url}', 'success')
+        flash(f'Nytt mål konfigurerat: {target_url} (Gammal ZAP-data rensad)', 'success')
         return redirect(url_for('session_capture'))
         
     return render_template('target.html')
@@ -1447,84 +1506,6 @@ def api_zap_diagnostic():
     
     return jsonify(result)
 
-
-@app.route('/api/reset-zap', methods=['POST'])
-def api_reset_zap():
-    """Reset ZAP och skapa ny session med korrekt scope"""
-    try:
-        app.logger.info("Starting complete reset (ZAP and application session)...")
-        target_url = session.get('target_url', '')
-
-        alerts_result = _zap_api_call('core/action/deleteAllAlerts')        
-        zap_reset_result = _zap_api_call('core/action/newSession', {
-            'name': 'session',
-            'overwrite': 'true'
-        }, timeout=20)
-        alerts_result = _zap_api_call('core/action/deleteAllAlerts')
-        
-        # Clear the Flask session but remember target URL if set
-        if target_url:
-            temp_target_url = target_url
-            session.clear()
-            session['target_url'] = temp_target_url
-        else:
-            session.clear()
-        
-        # Om vi har en target_url, sätt scope baserat på denna
-        if target_url:
-            # Extrahera domän från URL för context scope
-            from urllib.parse import urlparse
-            parsed_url = urlparse(target_url)
-            domain = parsed_url.netloc
-            
-            # Skapa ett nytt context för vår target
-            context_name = "Target Context"
-            context_result = _zap_api_call('context/action/newContext', {
-                'contextName': context_name
-            })
-            
-            if context_result['success']:
-                app.logger.info(f"Created new context: {context_name}")
-                
-                # Sätt scope för denna domän (inkludera allt på domänen)
-                include_pattern = f".*{domain}.*"
-                include_result = _zap_api_call('context/action/includeInContext', {
-                    'contextName': context_name,
-                    'regex': include_pattern
-                })
-                
-                if include_result['success']:
-                    app.logger.info(f"Set context scope to include: {include_pattern}")
-                else:
-                    app.logger.warning(f"Failed to set context scope: {include_result.get('response', 'Unknown error')}")
-                
-                # Skapa en default HTTP session i ZAP
-                session_result = _zap_api_call('httpSessions/action/createEmptySession', {
-                    'site': target_url,
-                    'session': 'Session 1'
-                })
-                
-                if session_result['success']:
-                    app.logger.info("Created default HTTP session: Session 1")
-                    session['zap_session_name'] = 'Session 1'
-                else:
-                    app.logger.warning(f"Failed to create HTTP session: {session_result.get('response', 'Unknown error')}")
-            else:
-                app.logger.warning(f"Failed to create context: {context_result.get('response', 'Unknown error')}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'ZAP och applikationssessionen har återställts',
-            'zap_reset': zap_reset_result['success'],
-            'target_set': bool(target_url),
-            'scope_set': target_url and context_result.get('success', False) and include_result.get('success', False)
-        })
-    except Exception as e:
-        app.logger.error(f"Error in complete reset: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 @app.route('/api/check-zap')
 def api_check_zap():
