@@ -25,8 +25,10 @@
             
             <p>För att skapa en användbar PEN-testning-rapport, följ dessa steg:</p>
             <ol>
-                <li>Konfigurera en Firefox webbläsare att använda proxyn nedan.</li>
+                <li><a href="http://{{ proxy_host }}:{{ proxy_port }}/OTHER/core/other/rootcert/?apikey={{ zap_api_key }}">Hämta root certifikat</a> och installera som ett "Trusted Root certificate authorities" för Attack Proxyn i din dator (för Chrome) eller i Browserns egna certifikathantering för Firefox</li>
+                <li>Starta en separat Chrome-instans via Powershell med proxykonfigurationen nedan. <br>Alternativt konfigurera en Firefox webbläsare att använda proxyn nedan.  </li>
                 <li>Besök målapplikationen: <a href="{{ target_url }}" target="_blank">{{ target_url }}</a></li>
+
                 <li>Logga in och <strong>utforska all funktionalitet</strong> som du vill testa.</li>
                 <li>Prova att utföra alla möjliga åtgärder (sök, filtrera, lägg till data, etc.)</li>
                 <li>När du har utforskat applikationen ordentligt, fortsätt till scanning.</li>
@@ -35,9 +37,15 @@
             <p><strong>Aktuell session:</strong> {{ zap_session_name }}</p>
         </div>
         <div class="card mb-3">
-            <div class="card-header">Steg 1: Konfigurera webbläsarproxy</div>
+            <div class="card-header">Steg 1: Konfigurera webbläsare för att använda attack proxy</div>
             <div class="card-body">
-                <p>Konfigurera din webbläsare att använda följande proxyserver:</p>
+                <div class="mb-3">
+                    <label class="form-label">Starta en separat Chrome-instans med proxyinställningar:</label>
+            
+                    <input type="text" class="form-control" value='Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList @("--proxy-server={{ proxy_host }}:{{ proxy_port }}", "--user-data-dir=c:\webpen", "--no-first-run", "--disable-extensions", "--new-window")' readonly>
+                </div>
+
+                <p>Eller konfigurera din Firefox att använda följande proxyserver (Settings > Proxy):</p>
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
@@ -52,6 +60,7 @@
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
 
@@ -65,7 +74,7 @@
                     <ol>
                         <li>Besök målwebbplatsen <a href="{{ target_url }}" target="_blank">{{ target_url }}</a></li>
                         <li>Logga in med giltiga uppgifter</li>
-                        <li>Surfa runt på de sidor du vill testa så att ZAP kan fånga upp deras struktur</li>
+                        <li>Surfa runt på de sidor du vill testa så att Attack proxyn kan fånga upp deras struktur</li>
                         <li>MYCKET VIKTIGT. Om du använder Protect, Standard eller Attack mode så kommer PEN-testningen automatisk replikera dina inmatningar med testdata. Var extremt försiktig.</li>
                     </ol>
                     

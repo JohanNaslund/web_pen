@@ -38,7 +38,7 @@ start_zap() {
     # Starta en ny container
     if docker run -d -p 8080:8080 --name zap ghcr.io/zaproxy/zaproxy:stable \
         zap.sh -daemon -host 0.0.0.0 -port 8080 \
-        -config api.key=changeme123 \
+        -config api.key=wsaYdB64K4 \
         -config api.addrs.addr.name=.* \
         -config api.addrs.addr.regex=true \
         -config proxy.ip=0.0.0.0; then
@@ -51,7 +51,7 @@ start_zap() {
     echo "Väntar på att Attack proxy ska starta..."
     sleep 5
 
-    if curl -s "http://localhost:8080/JSON/core/view/version/?apikey=changeme123" > /dev/null; then
+    if curl -s "http://localhost:8080/JSON/core/view/version/?apikey=wsaYdB64K4" > /dev/null; then
         success "Attack proxy API är tillgängligt"
     else
         warning "Attack proxy API svarar inte – det kan ta längre tid eller något är fel"
@@ -75,7 +75,7 @@ show_status() {
     if docker ps --format '{{.Names}}' | grep -q '^zap$'; then
         success "Attack proxy kör"
         echo "  API: http://localhost:8080/"
-        echo "  API-nyckel: changeme123"
+        echo "  API-nyckel: wsaYdB64K4"
         echo "  Proxy: localhost:8090"
     else
         warning "Attack proxy är inte igång"

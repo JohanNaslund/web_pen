@@ -20,15 +20,78 @@ import logging, base64
 import requests, psutil
 import urllib.parse
 import traceback
+import socket
+import subprocess
 
 #from modules.sql_injection_tester import SQLInjectionTester
+
+
+def get_local_ip():
+    """Hämta lokal IP-adress automatiskt"""
+    try:
+        # Metod 1: Anslut till en extern adress för att få lokal IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0)
+        try:
+            # Anslut till en adress (behöver inte vara nåbar)
+            s.connect(('10.255.255.255', 1))
+            IP = s.getsockname()[0]
+        except Exception:
+            IP = '127.0.0.1'
+        finally:
+            s.close()
+        return IP
+    except Exception:
+        return '127.0.0.1'
+
+def get_ubuntu_ip():
+    """Hämta IP med Ubuntu-kommandon som fallback"""
+    try:
+        # Använd hostname -I för att få alla IP-adresser
+        result = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            # Ta första IP-adressen (oftast den primära)
+            ips = result.stdout.strip().split()
+            if ips:
+                return ips[0]
+    except Exception as e:
+        print(f"Error getting IP with hostname: {e}")
+    
+    # Fallback till ip route
+    try:
+        result = subprocess.run(['ip', 'route', 'get', '8.8.8.8'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            # Extrahera IP från output
+            for line in result.stdout.split('\n'):
+                if 'src' in line:
+                    parts = line.split()
+                    src_index = parts.index('src')
+                    if src_index + 1 < len(parts):
+                        return parts[src_index + 1]
+    except Exception as e:
+        print(f"Error getting IP with ip route: {e}")
+    
+    return '127.0.0.1'
+
+def get_server_ip():
+    """Kombinerad funktion för att få bästa IP-adress"""
+    # Prova socket-metoden först
+    ip = get_local_ip()
+    
+    # Om vi bara får localhost, prova Ubuntu-kommandon
+    if ip == '127.0.0.1':
+        ip = get_ubuntu_ip()
+    
+    return ip
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # För sessionshantering
 csrf = CSRFProtect(app)
 
-ZAP_API_KEY = 'changeme123'
-ZAP_HOST = '192.168.2.110'  # eller IP-adressen där ZAP körs
+
+ZAP_API_KEY = 'wsaYdB64K4'
+ZAP_HOST = get_server_ip()
+PROXY_HOST = ZAP_HOST
 ZAP_API_PORT = 8080
 ZAP_PROXY_PORT = 8080
 scan_status_lock = threading.Lock()
@@ -48,6 +111,12 @@ print(f"ZAP available: {zap.is_available()}")
 '''sql_tester = SQLInjectionTester(storage_path='./data/sql_tester')'''
 session_manager = SessionManager(storage_path='./data/sessions')
 '''report_generator = ReportGenerator(storage_path='./data/reports')'''
+
+
+
+
+
+
 
 @app.route('/report')
 def report():
@@ -272,10 +341,11 @@ def session_capture():
     
     return render_template(
         'session_capture.html', 
-        proxy_host='localhost', 
+        proxy_host=PROXY_HOST, 
         proxy_port=8080,
         target_url=target_url,
         zap_mode=zap_mode,
+        zap_api_key=ZAP_API_KEY,
         zap_session_name=session.get('zap_session_name', '')
     )
 
@@ -649,181 +719,7 @@ def get_ajax_spider_status():
             'running': False
         }
 
-def transform_ajax_spider_results(raw_results):
-    """Transformerar råa Ajax Spider-resultat till det format som templates förväntar sig."""
-    transformed = []
-    
-    for item in raw_results:
-        # Extrahera URL och metod från requestHeader
-        url = ""
-        method = "GET"  # standard
-        
-        if "requestHeader" in item:
-            request_header = item["requestHeader"]
-            first_line = request_header.split('\r\n')[0] if '\r\n' in request_header else request_header
-            parts = first_line.split(' ', 2)  # Split max 2 times: METHOD URL HTTP_VERSION
-            if len(parts) >= 2:
-                method = parts[0]
-                url = parts[1]
-        
-        # Extrahera statuskod från responseHeader
-        status_code = None
-        if "responseHeader" in item:
-            response_header = item["responseHeader"]
-            first_line = response_header.split('\r\n')[0] if '\r\n' in response_header else response_header
-            parts = first_line.split(' ', 2)  # Split max 2 times: HTTP_VERSION STATUS_CODE STATUS_TEXT
-            if len(parts) >= 2 and parts[1].isdigit():
-                status_code = int(parts[1])
-        
-        # Skapa nytt objekt med rätt struktur
-        transformed_item = {
-            'url': url,
-            'method': method,
-            'statusCode': status_code,
-            # Lägg till andra egenskaper vid behov
-            'id': item.get('id'),
-            'timestamp': item.get('timestamp'),
-            'cookieParams': item.get('cookieParams', '')
-        }
-        
-        transformed.append(transformed_item)
-    
-    return transformed
 
-
-def setup_zap_session_with_cookies(target_url, cookies_str):
-    """Sets up a ZAP session with the provided cookies"""
-    if not cookies_str:
-        return False
-    
-    try:
-        # Parse cookies
-        cookies_dict = {}
-        for cookie in cookies_str.split(';'):
-            if '=' in cookie:
-                name, value = cookie.strip().split('=', 1)
-                cookies_dict[name.strip()] = value.strip()
-        
-        # Extract domain properly without http:// prefix
-        domain = target_url.split('//')[1].split('/')[0]
-        site = domain  # No http:// prefix
-        
-        print(f"Setting up ZAP session for site: {site}")
-        print(f"Found {len(cookies_dict)} cookies to add")
-        
-        # Create a session in ZAP
-        session_name = f"auth-session-{int(time.time())}"  # Make session name unique
-        session_create_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/httpSessions/action/createEmptySession/"
-        session_create_response = requests.get(
-            session_create_url,
-            params={
-                'apikey': ZAP_API_KEY,
-                'site': site,
-                'sessionName': session_name
-            },
-            timeout=5
-        )
-        print(f"Create session response: {session_create_response.text}")
-        
-        # Set it as active
-        active_session_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/httpSessions/action/setActiveSession/"
-        active_session_response = requests.get(
-            active_session_url,
-            params={
-                'apikey': ZAP_API_KEY,
-                'site': site,
-                'session': session_name
-            },
-            timeout=5
-        )
-        print(f"Set active session response: {active_session_response.text}")
-        
-        # Process each cookie
-        for name, value in cookies_dict.items():
-            print(f"Processing cookie: {name}")
-            
-            # Step 1: Make sure the token is recognized by ZAP
-            token_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/httpSessions/action/addSessionToken/"
-            token_response = requests.get(
-                token_url,
-                params={
-                    'apikey': ZAP_API_KEY,
-                    'site': site,
-                    'sessionToken': name
-                },
-                timeout=5
-            )
-            
-            # Check if token was added successfully
-            token_response_text = token_response.text
-            print(f"Add token response for {name}: {token_response_text}")
-            
-            # Step 2: Set the token value in the session
-            token_value_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/httpSessions/action/setSessionTokenValue/"
-            token_value_response = requests.get(
-                token_value_url,
-                params={
-                    'apikey': ZAP_API_KEY,
-                    'site': site,
-                    'session': session_name,
-                    'sessionToken': name,
-                    'tokenValue': value
-                },
-                timeout=5
-            )
-            
-            # Check if token value was set successfully
-            token_value_response_text = token_value_response.text
-            print(f"Set token value response for {name}: {token_value_response_text}")
-        
-        # Verify session setup by getting the session details
-        sessions_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/httpSessions/view/sessions/"
-        sessions_response = requests.get(
-            sessions_url,
-            params={
-                'apikey': ZAP_API_KEY,
-                'site': site
-            },
-            timeout=5
-        )
-        
-        # Check if session was created and has tokens
-        sessions_response_text = sessions_response.text
-        print(f"Sessions after setup: {sessions_response_text}")
-        
-        # Parse the JSON response to look for token values
-        sessions_data = json.loads(sessions_response_text)
-        sessions_list = sessions_data.get('sessions', [])
-        
-        # Check if our session exists with tokens
-        session_found = False
-        tokens_found = 0
-        
-        for session_info in sessions_list:
-            if session_info.get('name') == session_name:
-                session_found = True
-                tokens = session_info.get('tokens', {})
-                tokens_found = len(tokens)
-                print(f"Found session with {tokens_found} tokens")
-                
-                # Print each token and its value
-                for token_name, token_value in tokens.items():
-                    print(f"Token: {token_name}, Value: {token_value}")
-        
-        if not session_found:
-            print("WARNING: Session was not found after setup!")
-            return False
-            
-        if tokens_found == 0:
-            print("WARNING: Session was found but has no tokens!")
-            return False
-            
-        print(f"ZAP session setup successful with {tokens_found} tokens")
-        return True
-        
-    except Exception as e:
-        print(f"Error setting up ZAP session: {str(e)}")
-        return False
     
 
 
@@ -1141,23 +1037,6 @@ def api_cancel_scan(scan_id):
             'error': f'Error cancelling scan: {str(e)}'
         }), 500
 
-
-
-def save_scan_results_to_file(scan_id, results):
-    """Spara fullständiga skanningsresultat till fil"""
-    print("def save_scan_results_to_file")
-    try:
-        results_dir = os.path.join(app.config['RESULTS_DIR'], 'scans')
-        os.makedirs(results_dir, exist_ok=True)
-        
-        results_file = os.path.join(results_dir, f"{scan_id}.json")
-        
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2)
-            
-        print(f"Saved full scan results to {results_file}")
-    except Exception as e:
-        print(f"Error saving scan results: {str(e)}")
 
 
 
@@ -1751,92 +1630,7 @@ def start_ajax_spider_direct(target_url):
     except Exception as e:
         print(f'Error starting Ajax Spider: {str(e)}')
         raise e
-
-def run_ajax_spider_in_background(scan_id, target_url, cookies=None):
-    """Kör Ajax Spider i bakgrunden och uppdatera resultaten"""
-    try:
-        # Spara status som "running"
-        with scan_status_lock:
-            scan_statuses[scan_id] = {
-                'status': 'running',
-                'progress': 0,
-                'start_time': time.time(),
-                'target_url': target_url,
-                'type': 'ajax_spider'
-            }
-        
-        # Skapa kontext med cookies om sådana finns
-        context_id = None
-        if cookies:
-            try:
-                context_id = zap._create_context_with_session(target_url, cookies)
-                print(f"Created context with ID: {context_id} for Ajax Spider")
-            except Exception as e:
-                print(f"Error creating context with session: {str(e)}")
-        
-        # Starta Ajax Spider
-        ajax_scan_id = zap.zap.ajaxSpider.scan(target_url, contextname=context_id)
-        
-        # Spara initiala resultat
-        with scan_status_lock:
-            scan_statuses[scan_id].update({
-                'progress': 10,
-                'ajax_scan_id': ajax_scan_id
-            })
-        
-        # Övervaka framsteg
-        is_running = True
-        while is_running:
-            try:
-                status = zap.zap.ajaxSpider.status
-                is_running = status == "running"
-                
-                # Beräkna framsteg baserat på antal upptäckta resurser
-                try:
-                    num_resources = len(zap.zap.ajaxSpider.results())
-                    # Sätt framsteg till mellan 10% och 90% baserat på antal resurser
-                    progress = min(90, 10 + num_resources)
-                    
-                    with scan_status_lock:
-                        scan_statuses[scan_id]['progress'] = progress
-                        scan_statuses[scan_id]['resources_found'] = num_resources
-                except Exception as e:
-                    print(f"Error checking Ajax Spider results: {str(e)}")
-                
-                time.sleep(5)
-            except Exception as e:
-                print(f"Error monitoring Ajax Spider: {str(e)}")
-                is_running = False
-        
-        # Skanning klar
-        results = zap.zap.ajaxSpider.results()
-        
-        with scan_status_lock:
-            scan_statuses[scan_id].update({
-                'status': 'completed',
-                'progress': 100,
-                'completion_time': time.time(),
-                'results_count': len(results)
-            })
-            
-        # Spara fullständiga resultat till fil
-        results_dir = os.path.join(app.config['RESULTS_DIR'], 'ajax_spider')
-        os.makedirs(results_dir, exist_ok=True)
-        
-        results_file = os.path.join(results_dir, f"{scan_id}.json")
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2)
-            
-        print(f"Saved Ajax Spider results to {results_file}")
-            
-    except Exception as e:
-        # Fel vid skanning
-        with scan_status_lock:
-            scan_statuses[scan_id].update({
-                'status': 'error',
-                'error': str(e)
-            })
-        print(f"Error in Ajax Spider scan: {str(e)}")
+    
 
 @app.route('/api/ajax-spider/results')
 def api_ajax_spider_results():
@@ -2003,47 +1797,6 @@ def analyze_ajax_spider_results(results):
             }
     
     return summary
-
-def transform_ajax_spider_results(raw_results):
-    """Transformerar råa Ajax Spider-resultat till det format som templates förväntar sig."""
-    transformed = []
-    
-    for item in raw_results:
-        # Extrahera URL och metod från requestHeader
-        url = ""
-        method = "GET"  # standard
-        
-        if "requestHeader" in item:
-            request_header = item["requestHeader"]
-            first_line = request_header.split('\r\n')[0] if '\r\n' in request_header else request_header
-            parts = first_line.split(' ', 2)  # Split max 2 times: METHOD URL HTTP_VERSION
-            if len(parts) >= 2:
-                method = parts[0]
-                url = parts[1]
-        
-        # Extrahera statuskod från responseHeader
-        status_code = None
-        if "responseHeader" in item:
-            response_header = item["responseHeader"]
-            first_line = response_header.split('\r\n')[0] if '\r\n' in response_header else response_header
-            parts = first_line.split(' ', 2)  # Split max 2 times: HTTP_VERSION STATUS_CODE STATUS_TEXT
-            if len(parts) >= 2 and parts[1].isdigit():
-                status_code = int(parts[1])
-        
-        # Skapa nytt objekt med rätt struktur
-        transformed_item = {
-            'url': url,
-            'method': method,
-            'statusCode': status_code,
-            # Lägg till andra egenskaper vid behov
-            'id': item.get('id'),
-            'timestamp': item.get('timestamp'),
-            'cookieParams': item.get('cookieParams', '')
-        }
-        
-        transformed.append(transformed_item)
-    
-    return transformed
 
 @app.route('/api/ajax-spider-analysis')
 def ajax_spider_analysis():
@@ -2785,22 +2538,6 @@ def api_alert_details(alert_id):
             'error': str(e)
         }), 500
 
-def get_alerts_with_ids():
-    """Hämta alerts från ZAP med ID-fält säkerställt"""
-    try:
-        alerts = zap.get_alerts()
-        
-        # Om ID saknas i någon alert, lägg till det
-        for i, alert in enumerate(alerts):
-            if 'id' not in alert:
-                # Använd alertRef eller pluginId om tillgängligt, annars använd index
-                alert_id = alert.get('alertRef') or alert.get('pluginId') or str(i)
-                alert['id'] = str(alert_id)
-        
-        return alerts
-    except Exception as e:
-        app.logger.error(f"Error getting alerts with IDs: {str(e)}")
-        return []
 
 if __name__ == '__main__':
     test_zap_functionality()
