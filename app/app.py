@@ -596,8 +596,9 @@ def scan():
                     # Starta Ajax Spider med bara target_url
                     result = start_ajax_spider_direct(target_url)
                     
-                    # Markera att Ajax Spider är igång
+                    # Markera att Ajax Spider är igång OCH att den har startats
                     session['ajax_spider_running'] = True
+                    session['ajax_spider_ever_started'] = True  # NY FLAGGA
                     print(f"Ajax Spider started successfully")
                     flash('Ajax Spider started successfully', 'success')
                 except Exception as e:
@@ -606,29 +607,6 @@ def scan():
             else:
                 flash('No target URL specified', 'danger')
             
-        elif action == 'start_sqlmap':
-            session_name = request.form.get('session_name')
-            target_url = session.get('target_url')
-            
-            if not target_url:
-                flash('No target URL specified', 'danger')
-                return redirect(url_for('scan'))
-                
-            session_data = None
-            cookies = None
-            
-            if session_name:
-                session_data = session_manager.load_cookies(session_name)
-                if session_data:
-                    cookies = session_data.get('cookies', '')
-            
-            # Ställ in alternativ baserat på scanningstyp
-            risk = 1
-            level = 1
-            
-            if session.get('scan_type') == 'deep':
-                risk = 2
-                level = 3
         
         return redirect(url_for('scan'))
     
@@ -888,20 +866,28 @@ def scan_status_light():
             if ajax_response.status_code == 200:
                 ajax_data = ajax_response.json()
                 ajax_status = ajax_data.get('status', '')
+                
+                # Förbättrad logik för Ajax Spider status
                 status['ajax_spider'] = {
                     'status': ajax_status,
-                    'running': ajax_status == 'running'
+                    'running': ajax_status == 'running',
+                    'ever_started': session.get('ajax_spider_ever_started', False)  # Ny flagga
                 }
-            if ajax_status != 'running':
-                try:
-                    # Försök hämta antal resultat, inte alla resultat
-                    num_results_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/ajaxSpider/view/numberOfResults/"
-                    num_results_response = requests.get(num_results_url, params={'apikey': ZAP_API_KEY}, timeout=3)
-                    if num_results_response.status_code == 200:
-                        num_results_data = num_results_response.json()
-                        status['ajax_spider']['urls_found'] = num_results_data.get('numberOfResults', 0)
-                except Exception as e:
-                    print(f"Error getting number of Ajax Spider results: {str(e)}")                
+                
+                # Hämta antal resultat endast om Ajax Spider har körts
+                if ajax_status != 'running' and session.get('ajax_spider_ever_started', False):
+                    try:
+                        num_results_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/ajaxSpider/view/numberOfResults/"
+                        num_results_response = requests.get(num_results_url, params={'apikey': ZAP_API_KEY}, timeout=3)
+                        if num_results_response.status_code == 200:
+                            num_results_data = num_results_response.json()
+                            status['ajax_spider']['urls_found'] = num_results_data.get('numberOfResults', 0)
+                    except Exception as e:
+                        print(f"Error getting number of Ajax Spider results: {str(e)}")
+                else:
+                    # Om Ajax Spider aldrig har startats, sätt urls_found till None
+                    status['ajax_spider']['urls_found'] = None if not session.get('ajax_spider_ever_started', False) else 0
+                        
         except Exception as e:
             print(f"Error getting light Ajax Spider status: {str(e)}")
         

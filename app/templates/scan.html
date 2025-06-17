@@ -164,6 +164,15 @@ document.addEventListener('DOMContentLoaded', function() {
     window.ajaxSpiderComplete = false;
     window.pollingActive = true;
     
+    // KORRIGERAT: Lägg till event listener för Ajax Spider start-knappen DIREKT
+    if (startAjaxSpiderBtn) {
+        startAjaxSpiderBtn.addEventListener('click', function() {
+            // Markera att Ajax Spider har startats när knappen klickas
+            window.ajaxSpiderStarted = true;
+            console.log('Ajax Spider marked as started');
+        });
+    }
+    
     // Funktion för att uppdatera status
     function updateStatus() {
         // Om polling har stoppats, gör ingenting
@@ -180,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(data => {
-                console.log("Received status data:", data);  // Debugging
+
                 
                 // Uppdatera de individuella status-sektionerna
                 updateSpiderStatus(data.spider);
@@ -280,15 +289,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Update Ajax Spider status
+    // Update Ajax Spider status - KORRIGERAD VERSION
     function updateAjaxSpiderStatus(status) {
         if (!status) return;
         
-        // Check if Ajax Spider is running or has status
+        // Check if Ajax Spider is running or has results
         const isRunning = status.running === true;
-        const statusText = status.status || '';
+        const hasResults = (status.urls_found > 0 || status.numberOfResults > 0);
         
-        if (isRunning || statusText === 'stopped' || statusText === 'running') {
+        // VIKTIGT: Kontrollera om vi faktiskt har startat Ajax Spider i detta webbläsarfönster
+        const ajaxSpiderStarted = window.ajaxSpiderStarted || false;
+        
+
+        
+        if (isRunning || (hasResults && ajaxSpiderStarted) || (status.status === 'stopped' && ajaxSpiderStarted)) {
             ajaxSpiderProgressContainer.classList.remove('d-none');
             
             // If running, show animated progress bar
@@ -301,13 +315,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     startAjaxSpiderBtn.disabled = true;
                     startAjaxSpiderBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kör...';
                 }
+                
+                // Markera att Ajax Spider har startats
+                window.ajaxSpiderStarted = true;
             } 
-            // If stopped
-            else if (statusText === 'stopped') {
+            // If stopped or completed and we explicitly started this scan
+            else if ((status.status === 'stopped' || status.status === '') && ajaxSpiderStarted) {
                 ajaxSpiderProgressBar.style.width = '100%';
                 ajaxSpiderProgressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
                 
-                const resourcesFound = status.urls_found || 0;
+                const resourcesFound = status.urls_found || status.numberOfResults || 0;
                 ajaxSpiderStatusElem.innerHTML = `Status: <span class="badge bg-success">Slutförd</span> (${resourcesFound} URLs)`;
                 
                 if (startAjaxSpiderBtn) {
@@ -317,10 +334,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     startAjaxSpiderBtn.innerHTML = 'Ajax Spider Klar <i class="bi bi-check-circle"></i>';
                 }
                 
+                // Update number of URLs found in results section
+                if (ajaxUrlsCount) {
+                    ajaxUrlsCount.textContent = resourcesFound;
+                }
+                
                 // Set flag for Ajax Spider completion
                 window.ajaxSpiderComplete = true;
+            }
+        } else {
+            // Om Ajax Spider inte har startats, visa korrekt status
+            if (!ajaxSpiderStarted) {
+                ajaxSpiderStatusElem.innerHTML = `Status: <span class="badge bg-secondary">Inte startad</span>`;
             } else {
-                ajaxSpiderStatusElem.innerHTML = `Status: <span class="badge bg-secondary">${statusText}</span>`;
+                ajaxSpiderStatusElem.innerHTML = `Status: <span class="badge bg-secondary">${status.status || 'Okänd status'}</span>`;
             }
         }
     }
@@ -379,14 +406,6 @@ document.addEventListener('DOMContentLoaded', function() {
             viewReportBtn.disabled = true;
         }
         
-        // Logga status för debugging
-        console.log("Status update:", {
-            spiderComplete,
-            activeScanComplete,
-            ajaxSpiderComplete,
-            totalAlerts: zapAlertsCount ? zapAlertsCount.textContent : 'N/A',
-            ajaxUrls: ajaxUrlsCount ? ajaxUrlsCount.textContent : 'N/A'
-        });
     }
     
     // Funktion för att kontrollera om vi ska stoppa polling
