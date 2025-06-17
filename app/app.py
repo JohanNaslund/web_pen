@@ -25,6 +25,8 @@ import subprocess
 
 #from modules.sql_injection_tester import SQLInjectionTester
 
+from modules.access_control_manager import AccessControlManager
+
 
 def get_local_ip():
     """Hämta lokal IP-adress automatiskt"""
@@ -112,9 +114,105 @@ print(f"ZAP available: {zap.is_available()}")
 session_manager = SessionManager(storage_path='./data/sessions')
 '''report_generator = ReportGenerator(storage_path='./data/reports')'''
 
+access_control_manager = AccessControlManager(zap)
 
 
 
+@app.route('/access-control')
+def access_control():
+    """Access Control Testing huvudsida"""
+    return render_template('access_control.html')
+
+@app.route('/api/access-control/reset-zap', methods=['POST'])
+def api_access_control_reset_zap():
+    """Nollställ ZAP för Access Control Testing"""
+    try:
+        result = access_control_manager.reset_for_new_test()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/collect-urls', methods=['POST'])
+def api_access_control_collect_urls():
+    """Samla URL:er från nuvarande ZAP-session"""
+    try:
+        data = request.json
+        session_label = data.get('session_label', 'unknown')
+        target_url = data.get('target_url', session.get('target_url', ''))
+        
+        if not target_url:
+            return jsonify({
+                'success': False,
+                'error': 'Ingen target URL angiven'
+            }), 400
+        
+        result = access_control_manager.collect_session_urls(session_label, target_url)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/sessions')
+def api_access_control_list_sessions():
+    """Lista alla insamlade sessioner"""
+    try:
+        sessions = access_control_manager.list_collected_sessions()
+        return jsonify({
+            'success': True,
+            'sessions': sessions
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/session/<session_filename>')
+def api_access_control_get_session(session_filename):
+    """Hämta detaljer för en specifik session"""
+    try:
+        result = access_control_manager.get_session_urls(session_filename)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/test', methods=['POST'])
+def api_access_control_test():
+    """Starta Access Control test"""
+    try:
+        data = request.json
+        source_session_file = data.get('source_session_file')
+        test_cookies = data.get('test_cookies', '')
+        test_label = data.get('test_label', 'test_user')
+        selected_urls = data.get('selected_urls')  # Optional
+        
+        if not source_session_file:
+            return jsonify({
+                'success': False,
+                'error': 'Ingen käll-session angiven'
+            }), 400
+        
+        result = access_control_manager.test_access_control(
+            source_session_file, 
+            test_cookies, 
+            test_label, 
+            selected_urls
+        )
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 
