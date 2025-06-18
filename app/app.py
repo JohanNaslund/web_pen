@@ -120,8 +120,22 @@ access_control_manager = AccessControlManager(zap)
 
 @app.route('/access-control')
 def access_control():
-    """Access Control Testing huvudsida"""
-    return render_template('access_control.html')
+    """Access Control Testing huvudsida med korrekt target-integration"""
+    
+    # Kontrollera om det finns ett mål-URL från huvudkonfigurationen
+    target_url = session.get('target_url', '')
+    
+    if not target_url:
+        flash("Inget mål-URL konfigurerat. Gå till startsidan och konfigurera ett mål först.", "warning")
+        return redirect(url_for('target'))
+    
+    # Kontrollera att ZAP är tillgänglig
+    if not zap.is_available():
+        flash("ZAP är inte tillgänglig. Kontrollera att ZAP körs.", "danger")
+    
+    return render_template('access_control.html', 
+                          target_url=target_url,
+                          zap_available=zap.is_available())
 
 @app.route('/api/access-control/reset-zap', methods=['POST'])
 def api_access_control_reset_zap():
@@ -1190,67 +1204,7 @@ def debug_zap_cookies():
         result['error'] = str(e)
         return jsonify(result)
 
-@app.route('/api/debug-cookies')
-def debug_cookies():
-    print("/api/debug-zap-cookies")
-    """Debug-endpoint för cookie-hantering"""
-    debug_info = {
-        'session_data': {k: session.get(k) for k in session},
-        'target_url': session.get('target_url', 'Not set'),
-        'zap_status': 'unknown',
-        'zap_sites': [],
-        'manual_cookies_test': {}
-    }
-    
-    # Testa om vi kan hämta cookies manuellt
-    if 'target_url' in session and session['target_url']:
-        target_url = session['target_url']
-        debug_info['manual_cookies_test']['target_url'] = target_url
-        
-        # Testa om ZAP är tillgängligt
-        try:
-            if zap.is_available():
-                debug_info['zap_status'] = 'available'
-                
-                # Hämta alla webbplatser i ZAP
-                try:
-                    sites = zap.zap.core.sites
-                    debug_info['zap_sites'] = sites
-                    
-                    # Se om vår target_url finns i någon av platserna
-                    domain = urlparse(target_url).netloc
-                    matching_sites = [site for site in sites if domain in site]
-                    debug_info['matching_sites'] = matching_sites
-                    
-                    # Försök få cookies från matching sites
-                    for site in matching_sites:
-                        try:
-                            # Metod 1: Hämta sessioner
-                            sessions = zap.zap.httpsessions.sessions(site)
-                            debug_info['manual_cookies_test'][f'sessions_{site}'] = sessions
-                            
-                            # Metod 2: Hämta meddelanden
-                            messages = zap.zap.core.messages(baseurl=site)
-                            cookie_headers = []
-                            
-                            for msg in messages:
-                                if isinstance(msg, dict) and 'requestHeader' in msg:
-                                    headers = msg['requestHeader'].split('\r\n')
-                                    for header in headers:
-                                        if header.lower().startswith('cookie:'):
-                                            cookie_headers.append(header[7:].strip())
-                            
-                            debug_info['manual_cookies_test'][f'cookie_headers_{site}'] = cookie_headers
-                        except Exception as e:
-                            debug_info['manual_cookies_test'][f'error_{site}'] = str(e)
-                except Exception as e:
-                    debug_info['zap_sites_error'] = str(e)
-            else:
-                debug_info['zap_status'] = 'unavailable'
-        except Exception as e:
-            debug_info['zap_error'] = str(e)
-    
-    return jsonify(debug_info)
+
 
 @app.route('/test-cookies')
 def test_cookies():
@@ -2622,6 +2576,356 @@ def api_alert_details(alert_id):
             'error': str(e)
         }), 500
 
+@app.route('/api/access-control/extract-cookies')
+def api_access_control_extract_cookies():
+    """Extrahera cookies från ZAP för access control testing med korrekt target"""
+    try:
+        # Kontrollera ZAP-status
+        if not zap.is_available():
+            return jsonify({
+                'success': False,
+                'error': 'ZAP är inte tillgänglig. Kontrollera att ZAP körs och är ansluten.'
+            }), 503
+        
+        # Hämta target_url med prioriterad ordning
+        target_url = None
+        
+        # 1. Från Flask session (huvudkonfiguration)
+        if 'target_url' in session and session['target_url']:
+            target_url = session['target_url']
+            app.logger.info(f"Using target_url from main session: {target_url}")
+        
+        # 2. Från query parameter 
+        elif request.args.get('target_url'):
+            target_url = request.args.get('target_url')
+            app.logger.info(f"Using target_url from query param: {target_url}")
+        
+        # 3. Från target-url form field (från access control sidan)
+        elif request.args.get('url'):
+            target_url = request.args.get('url')
+            app.logger.info(f"Using target_url from url param: {target_url}")
+        
+        # 4. Försök hitta rätt site i ZAP (undvik test-sites)
+        else:
+            try:
+                sites = zap.zap.core.sites
+                app.logger.info(f"Available ZAP sites: {sites}")
+                
+                # Filtrera bort test/utvecklingssites
+                real_sites = []
+                skip_patterns = ['oast.pro', 'oast.online', 'amazonaws.com', 'gstatic.com', 'googleapis.com', ':5000', ':5001']
+                
+                for site in sites:
+                    if site and not any(pattern in site for pattern in skip_patterns):
+                        real_sites.append(site)
+                
+                if real_sites:
+                    target_url = real_sites[0]
+                    app.logger.info(f"Using first real site from ZAP: {target_url}")
+                    
+            except Exception as e:
+                app.logger.warning(f"Could not get sites from ZAP: {str(e)}")
+        
+        if not target_url:
+            return jsonify({
+                'success': False,
+                'error': 'Ingen target URL tillgänglig.',
+                'suggestions': [
+                    'Gå till startsidan och konfigurera ett mål först',
+                    'Eller ange target URL manuellt i formuläret'
+                ],
+                'debug_info': {
+                    'session_keys': list(session.keys()),
+                    'has_target_url': 'target_url' in session,
+                    'session_target': session.get('target_url', 'None'),
+                    'zap_sites': zap.zap.core.sites if zap.is_available() else []
+                }
+            }), 400
+        
+        app.logger.info(f"Extracting cookies for URL: {target_url}")
+        
+        # Använd den förbättrade cookie-extraktionen
+        try:
+            # Försök med den direkta metoden först
+            cookies = access_control_manager.get_cookies_from_messages(target_url)
+            
+            if cookies and cookies.strip():
+                return jsonify({
+                    'success': True,
+                    'cookies': cookies,
+                    'target_url': target_url,
+                    'message': f'Cookies extraherade från {target_url}',
+                    'method': 'direct_header_extraction'
+                })
+            
+            # Fallback till ZAP:s inbyggda metod
+            app.logger.info("Trying fallback cookie extraction method...")
+            fallback_cookies = zap.get_cookies(target_url)
+            
+            if fallback_cookies and fallback_cookies.strip():
+                return jsonify({
+                    'success': True,
+                    'cookies': fallback_cookies,
+                    'target_url': target_url,
+                    'message': f'Cookies extraherade från {target_url} (fallback method)',
+                    'method': 'zap_builtin_extraction'
+                })
+            
+            # Om fortfarande inga cookies, ge detaljerad diagnostik
+            domain = access_control_manager._extract_domain_or_ip(target_url)
+            
+            # Kontrollera meddelanden för denna domän
+            messages_result = zap._direct_api_call('core/view/messages', {
+                'baseurl': '',
+                'start': '0',
+                'count': '500'
+            })
+            
+            messages_with_domain = 0
+            messages_with_cookies = 0
+            sample_headers = []
+            
+            if messages_result['success']:
+                messages = messages_result['data'].get('messages', [])
+                
+                for message in messages:
+                    request_header = message.get('requestHeader', '')
+                    if domain in request_header:
+                        messages_with_domain += 1
+                        if 'Cookie:' in request_header:
+                            messages_with_cookies += 1
+                            # Spara ett exempel på header
+                            if len(sample_headers) < 3:
+                                cookie_line = ''
+                                for line in request_header.split('\n'):
+                                    if line.strip().lower().startswith('cookie:'):
+                                        cookie_line = line.strip()
+                                        break
+                                if cookie_line:
+                                    sample_headers.append(cookie_line[:100] + '...' if len(cookie_line) > 100 else cookie_line)
+            
+            return jsonify({
+                'success': False,
+                'error': f'Inga cookies hittades för {domain}',
+                'target_url': target_url,
+                'domain': domain,
+                'diagnostics': {
+                    'total_messages': len(messages_result['data'].get('messages', [])) if messages_result['success'] else 0,
+                    'messages_with_domain': messages_with_domain,
+                    'messages_with_cookies': messages_with_cookies,
+                    'sample_cookie_headers': sample_headers
+                },
+                'suggestions': [
+                    f'Kontrollera att du har surfat på {domain} via ZAP proxy',
+                    'Ladda om målsidan medan ZAP proxy är aktivt',
+                    'Kontrollera att du är inloggad på webbplatsen',
+                    'Verifiera att ZAP fångar trafik från rätt domän'
+                ]
+            })
+            
+        except Exception as cookie_error:
+            app.logger.error(f"Error extracting cookies: {str(cookie_error)}")
+            return jsonify({
+                'success': False,
+                'error': f'Fel vid extrahering av cookies: {str(cookie_error)}',
+                'target_url': target_url
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f"General error in extract-cookies endpoint: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Oväntat fel: {str(e)}'
+        }), 500
+
+
+@app.route('/api/access-control/set-target', methods=['POST'])
+def api_access_control_set_target():
+    """Sätt target URL för access control testing"""
+    try:
+        data = request.json
+        target_url = data.get('target_url', '').strip()
+        
+        if not target_url:
+            return jsonify({
+                'success': False,
+                'error': 'Ingen target URL angiven'
+            }), 400
+        
+        # Validera URL-format
+        if not target_url.startswith(('http://', 'https://')):
+            target_url = 'http://' + target_url
+        
+        # Spara i sessionen
+        session['target_url'] = target_url
+        
+        return jsonify({
+            'success': True,
+            'target_url': target_url,
+            'message': f'Target URL satt till: {target_url}'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# Debug-endpoint för att troubleshoot cookie-extraktion
+@app.route('/api/access-control/debug-cookies')
+def api_access_control_debug_cookies():
+    """Debug-endpoint för cookie-extraktion"""
+    debug_info = {
+        'timestamp': time.time(),
+        'zap_available': False,
+        'session_data': {},
+        'zap_sites': [],
+        'target_url_sources': {}
+    }
+    
+    try:
+        # Kontrollera ZAP status
+        debug_info['zap_available'] = zap.is_available()
+        
+        # Session data
+        debug_info['session_data'] = {
+            'has_target_url': 'target_url' in session,
+            'target_url': session.get('target_url', 'None'),
+            'all_keys': list(session.keys())
+        }
+        
+        # ZAP sites
+        if debug_info['zap_available']:
+            try:
+                sites = zap.zap.core.sites
+                debug_info['zap_sites'] = sites
+            except Exception as e:
+                debug_info['zap_sites_error'] = str(e)
+        
+        # Test olika källor för target_url
+        debug_info['target_url_sources'] = {
+            'session': session.get('target_url', None),
+            'query_param': request.args.get('target_url', None),
+            'first_zap_site': debug_info['zap_sites'][0] if debug_info['zap_sites'] else None
+        }
+        
+        # Om vi har en target_url, testa cookie-extraktion
+        target_url = debug_info['target_url_sources']['session']
+        if target_url and debug_info['zap_available']:
+            try:
+                cookies = zap.get_cookies(target_url)
+                debug_info['cookie_test'] = {
+                    'success': bool(cookies),
+                    'cookies_length': len(cookies) if cookies else 0,
+                    'cookies_preview': cookies[:100] + '...' if cookies and len(cookies) > 100 else cookies
+                }
+            except Exception as e:
+                debug_info['cookie_test'] = {
+                    'success': False,
+                    'error': str(e)
+                }
+        
+        return jsonify(debug_info)
+    except Exception as e:
+        debug_info['error'] = str(e)
+        return jsonify(debug_info), 500
+
+@app.route('/api/access-control/test-results')
+def api_access_control_test_results():
+    """Lista alla access control testresultat"""
+    try:
+        # Läs alla testfiler från tests-katalogen
+        tests_dir = access_control_manager.tests_dir
+        test_results = []
+        
+        if not os.path.exists(tests_dir):
+            return jsonify({
+                'success': True,
+                'tests': []
+            })
+        
+        # Läs alla testfiler
+        for filename in os.listdir(tests_dir):
+            if filename.startswith('test_') and filename.endswith('.json'):
+                filepath = os.path.join(tests_dir, filename)
+                
+                try:
+                    with open(filepath, 'r') as f:
+                        test_data = json.load(f)
+                    
+                    # Räkna risk-fördelning
+                    risk_counts = {
+                        'CRITICAL': 0,
+                        'HIGH': 0,
+                        'MEDIUM': 0,
+                        'LOW': 0,
+                        'ERROR': 0
+                    }
+                    
+                    for result in test_data.get('results', []):
+                        risk_level = result.get('risk_level', 'ERROR')
+                        if risk_level in risk_counts:
+                            risk_counts[risk_level] += 1
+                    
+                    # Skapa sammanfattning för UI
+                    test_summary = {
+                        'filename': filename,
+                        'test_label': test_data.get('test_label', 'Unknown'),
+                        'source_session_label': test_data.get('source_session_label', 'Unknown'),
+                        'test_time': test_data.get('test_time', 0),
+                        'total_tested': test_data.get('total_tested', 0),
+                        'risk_counts': risk_counts
+                    }
+                    
+                    test_results.append(test_summary)
+                except Exception as e:
+                    app.logger.error(f"Error reading test file {filename}: {str(e)}")
+                    continue
+        
+        # Sortera efter test_time (nyast först)
+        test_results.sort(key=lambda x: x['test_time'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'tests': test_results
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/test-details/<test_filename>')
+def api_access_control_test_details(test_filename):
+    """Hämta detaljerade resultat från ett specifikt test"""
+    try:
+        # Säkerhetskontroll - bara tillåt filer som slutar med .json
+        if not test_filename.endswith('.json') or '..' in test_filename:
+            return jsonify({
+                'success': False,
+                'error': 'Ogiltig filnamn'
+            }), 400
+        
+        filepath = os.path.join(access_control_manager.tests_dir, test_filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': 'Testfil hittades inte'
+            }), 404
+        
+        with open(filepath, 'r') as f:
+            test_data = json.load(f)
+        
+        return jsonify({
+            'success': True,
+            'test_data': test_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
     test_zap_functionality()

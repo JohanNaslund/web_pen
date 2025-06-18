@@ -197,3 +197,86 @@ pre {
 .animate-pulse {
     animation: pulse 2s infinite;
 }
+
+/* Access Control Testing-specifik CSS - lägg till i style.css */
+
+.session-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.session-card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.session-header {
+    padding: 1rem 1rem 0.5rem 1rem;
+}
+
+.session-body {
+    padding: 0.5rem 1rem 1rem 1rem;
+}
+
+.risk-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.risk-indicator.low {
+    background-color: #28a745;
+}
+
+.risk-indicator.medium {
+    background-color: #17a2b8;
+}
+
+.risk-indicator.high {
+    background-color: #ffc107;
+}
+
+.risk-indicator.critical {
+    background-color: #dc3545;
+}
+
+.category-badge {
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.url-display {
+    font-size: 0.875rem;
+    background-color: #f8f9fa;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+}
+
+.test-result-card {
+    border-left: 4px solid transparent;
+}
+
+.test-result-card.border-success {
+    border-left-color: #28a745;
+}
+
+.test-result-card.border-warning {
+    border-left-color: #ffc107;
+}
+
+.test-result-card.border-danger {
+    border-left-color: #dc3545;
+}
+
+.test-result-card.border-info {
+    border-left-color: #17a2b8;
+}
+
+.test-progress .progress-bar.test-running {
+    background: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent);
+    background-size: 1rem 1rem;
+    animation: progress-bar-stripes 1s linear infinite;
+}

@@ -296,33 +296,180 @@ document.addEventListener('DOMContentLoaded', function() {
      * Extrahera cookies från ZAP
      */
     function extractCookies() {
-        setButtonLoading(extractCookiesBtn, '');
+        setButtonLoading(extractCookiesBtn, 'Hämtar cookies...');
         
         fetch('/api/access-control/extract-cookies')
-        .then(response => response.json())
+        .then(response => {
+            // Hantera både lyckade och misslyckade HTTP-svar
+            if (!response.ok) {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success && data.cookies) {
                 testCookiesInput.value = data.cookies;
                 testCookiesInput.classList.add('is-valid');
                 setTimeout(() => testCookiesInput.classList.remove('is-valid'), 3000);
-                showSuccess(testStatus, 'Cookies extraherade från ZAP', '', 3000);
+                
+                showSuccess(testStatus, 
+                    `Cookies extraherade från ${data.target_url || 'ZAP'}`, 
+                    'Framgång', 5000);
             } else {
                 testCookiesInput.classList.add('is-invalid');
                 setTimeout(() => testCookiesInput.classList.remove('is-invalid'), 3000);
-                showError(testStatus, data.error || 'Inga cookies hittades i ZAP', '', 3000);
+                
+                // Visa förslag om de finns
+                let errorMessage = data.error || 'Inga cookies hittades i ZAP';
+                if (data.suggestions && data.suggestions.length > 0) {
+                    errorMessage += '<br><br><strong>Förslag:</strong><ul>';
+                    data.suggestions.forEach(suggestion => {
+                        errorMessage += `<li>${suggestion}</li>`;
+                    });
+                    errorMessage += '</ul>';
+                }
+                
+                // Lägg till debug-knapp för felsökning
+                errorMessage += '<br><button id="debug-cookies-btn" class="btn btn-sm btn-outline-secondary mt-2">Debug cookie-extraktion</button>';
+                
+                showError(testStatus, errorMessage, 'Inga cookies hittades', 10000);
+                
+                // Lägg till event listener för debug-knappen
+                setTimeout(() => {
+                    const debugBtn = document.getElementById('debug-cookies-btn');
+                    if (debugBtn) {
+                        debugBtn.addEventListener('click', debugCookieExtraction);
+                    }
+                }, 100);
             }
         })
         .catch(error => {
             console.error('Error extracting cookies:', error);
             testCookiesInput.classList.add('is-invalid');
             setTimeout(() => testCookiesInput.classList.remove('is-invalid'), 3000);
-            showError(testStatus, `Nätverksfel: ${error.message}`, '', 3000);
+            
+            let errorMessage = `Fel vid cookie-extraktion: ${error.message}`;
+            
+            // Lägg till specifika felmeddelanden för vanliga problem
+            if (error.message.includes('Target URL')) {
+                errorMessage += '<br><br><strong>Lösning:</strong> Gå till startsidan och konfigurera ett mål-URL först.';
+            } else if (error.message.includes('ZAP är inte tillgänglig')) {
+                errorMessage += '<br><br><strong>Lösning:</strong> Kontrollera att ZAP körs och är ansluten.';
+            }
+            
+            errorMessage += '<br><button id="debug-cookies-btn" class="btn btn-sm btn-outline-secondary mt-2">Debug cookie-extraktion</button>';
+            
+            showError(testStatus, errorMessage, 'Fel', 10000);
+            
+            // Lägg till event listener för debug-knappen
+            setTimeout(() => {
+                const debugBtn = document.getElementById('debug-cookies-btn');
+                if (debugBtn) {
+                    debugBtn.addEventListener('click', debugCookieExtraction);
+                }
+            }, 100);
         })
         .finally(() => {
             resetButtonLoading(extractCookiesBtn, '<i class="bi bi-download"></i> Extrahera från ZAP');
         });
     }
     
+    /**
+     * Debug-funktion för cookie-extraktion
+     */
+    function debugCookieExtraction() {
+        const debugBtn = document.getElementById('debug-cookies-btn');
+        if (debugBtn) {
+            debugBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analyserar...';
+            debugBtn.disabled = true;
+        }
+        
+        fetch('/api/access-control/debug-cookies')
+        .then(response => response.json())
+        .then(data => {
+            // Skapa debug-modal
+            const modalHtml = `
+                <div class="modal fade" id="debugModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Cookie-extraktion Debug Information</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <h6>ZAP Status</h6>
+                                <p><strong>Tillgänglig:</strong> ${data.zap_available ? '✅ Ja' : '❌ Nej'}</p>
+                                
+                                <h6>Session Data</h6>
+                                <p><strong>Har target_url:</strong> ${data.session_data.has_target_url ? '✅ Ja' : '❌ Nej'}</p>
+                                <p><strong>Target URL:</strong> <code>${data.session_data.target_url}</code></p>
+                                <p><strong>Session-nycklar:</strong> ${data.session_data.all_keys.join(', ')}</p>
+                                
+                                <h6>ZAP Sites</h6>
+                                ${data.zap_sites.length > 0 ? 
+                                    `<ul>${data.zap_sites.map(site => `<li><code>${site}</code></li>`).join('')}</ul>` : 
+                                    '<p>Inga sites hittades i ZAP</p>'
+                                }
+                                
+                                <h6>Target URL Källor</h6>
+                                <ul>
+                                    <li><strong>Session:</strong> ${data.target_url_sources.session || 'Ingen'}</li>
+                                    <li><strong>Query parameter:</strong> ${data.target_url_sources.query_param || 'Ingen'}</li>
+                                    <li><strong>Första ZAP site:</strong> ${data.target_url_sources.first_zap_site || 'Ingen'}</li>
+                                </ul>
+                                
+                                ${data.cookie_test ? `
+                                    <h6>Cookie Test</h6>
+                                    <p><strong>Framgång:</strong> ${data.cookie_test.success ? '✅ Ja' : '❌ Nej'}</p>
+                                    ${data.cookie_test.success ? 
+                                        `<p><strong>Cookies längd:</strong> ${data.cookie_test.cookies_length} tecken</p>
+                                        <p><strong>Preview:</strong> <code>${data.cookie_test.cookies_preview}</code></p>` :
+                                        `<p><strong>Fel:</strong> ${data.cookie_test.error}</p>`
+                                    }
+                                ` : ''}
+                                
+                                ${data.error ? `<div class="alert alert-danger mt-3">Fel: ${data.error}</div>` : ''}
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Stäng</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Ta bort befintlig modal om den finns
+            const existingModal = document.getElementById('debugModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Lägg till ny modal
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Visa modal
+            const modal = new bootstrap.Modal(document.getElementById('debugModal'));
+            modal.show();
+            
+            // Rensa modal när den stängs
+            document.getElementById('debugModal').addEventListener('hidden.bs.modal', function() {
+                this.remove();
+            });
+        })
+        .catch(error => {
+            console.error('Error getting debug info:', error);
+            alert('Kunde inte hämta debug-information: ' + error.message);
+        })
+        .finally(() => {
+            if (debugBtn) {
+                debugBtn.innerHTML = 'Debug cookie-extraktion';
+                debugBtn.disabled = false;
+            }
+        });
+    }
+
     /**
      * Starta Access Control Test
      */
