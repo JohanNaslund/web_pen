@@ -1,44 +1,50 @@
-// app/static/js/access_control.js
-/**
- * JavaScript för Access Control Testing
- */
-
 document.addEventListener('DOMContentLoaded', function() {
     // Element referenser
     const resetZapBtn = document.getElementById('reset-zap-btn');
-    const collectUrlsBtn = document.getElementById('collect-urls-btn');
-    const targetUrlInput = document.getElementById('target-url');
-    const sessionLabelInput = document.getElementById('session-label');
-    const startTestBtn = document.getElementById('start-test-btn');
-    const extractCookiesBtn = document.getElementById('extract-cookies-btn');
+    const startSessionBtn = document.getElementById('start-session-btn');
+    const stopSessionBtn = document.getElementById('stop-session-btn');
     const refreshSessionsBtn = document.getElementById('refresh-sessions-btn');
+    const startAccessTestBtn = document.getElementById('start-access-test-btn');
     const refreshResultsBtn = document.getElementById('refresh-results-btn');
     
-    const sourceSessionSelect = document.getElementById('source-session-select');
-    const testLabelInput = document.getElementById('test-label');
-    const testCookiesInput = document.getElementById('test-cookies');
+    const currentSessionLabelInput = document.getElementById('current-session-label');
+    const targetUrlInput = document.getElementById('target-url');
+    const urlsFromSessionSelect = document.getElementById('urls-from-session');
+    const credentialsFromSessionSelect = document.getElementById('credentials-from-session');
+    const testDescriptionInput = document.getElementById('test-description');
     
     const resetStatus = document.getElementById('reset-status');
-    const collectionStatus = document.getElementById('collection-status');
+    const sessionRecordingStatus = document.getElementById('session-recording-status');
     const testStatus = document.getElementById('test-status');
-    const sessionsList = document.getElementById('sessions-list');
+    const savedSessions = document.getElementById('saved-sessions');
     const testResults = document.getElementById('test-results');
+    const recordingInstructions = document.getElementById('recording-instructions');
+    const targetDisplay = document.getElementById('target-display');
+    const roleDisplay = document.getElementById('role-display');
+    
+    // State management
+    let isRecording = false;
+    let currentRecordingSession = null;
     
     // Event Listeners
     resetZapBtn.addEventListener('click', resetZAP);
-    collectUrlsBtn.addEventListener('click', collectURLs);
-    startTestBtn.addEventListener('click', startAccessControlTest);
-    extractCookiesBtn.addEventListener('click', extractCookies);
-    refreshSessionsBtn.addEventListener('click', loadSessions);
+    startSessionBtn.addEventListener('click', startSessionRecording);
+    stopSessionBtn.addEventListener('click', stopSessionRecording);
+    refreshSessionsBtn.addEventListener('click', loadSavedSessions);
+    startAccessTestBtn.addEventListener('click', startAccessControlTest);
     refreshResultsBtn.addEventListener('click', loadTestResults);
     
-    // Auto-refresh sessions and results every 30 seconds
-    setInterval(loadSessions, 30000);
-    setInterval(loadTestResults, 30000);
+    // Validering för att aktivera test-knappen
+    urlsFromSessionSelect.addEventListener('change', validateTestConfiguration);
+    credentialsFromSessionSelect.addEventListener('change', validateTestConfiguration);
     
     // Initial load
-    loadSessions();
+    loadSavedSessions();
     loadTestResults();
+    
+    // Auto-refresh
+    setInterval(loadSavedSessions, 30000);
+    setInterval(loadTestResults, 30000);
     
     /**
      * Nollställ ZAP för Access Control Testing
@@ -57,14 +63,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showSuccess(resetStatus, data.message, 'ZAP har nollställts framgångsrikt!');
-                // Rensa formulärfält
-                targetUrlInput.value = '';
-                sessionLabelInput.value = '';
-                testCookiesInput.value = '';
-                testLabelInput.value = '';
-                // Uppdatera listor
-                loadSessions();
+                showSuccess(resetStatus, data.message, 'ZAP Nollställt');
+                // Rensa alla formulärfält
+                clearAllForms();
+                loadSavedSessions();
                 loadTestResults();
             } else {
                 showError(resetStatus, data.error);
@@ -75,650 +77,406 @@ document.addEventListener('DOMContentLoaded', function() {
             showError(resetStatus, `Nätverksfel: ${error.message}`);
         })
         .finally(() => {
-            resetButtonLoading(resetZapBtn, '<i class="bi bi-arrow-clockwise"></i> Nollställ ZAP för Access Control Testing');
+            resetButtonLoading(resetZapBtn, '<i class="bi bi-arrow-clockwise"></i> Nollställ ZAP');
         });
     }
     
     /**
-     * Samla URL:er från nuvarande ZAP-session
+     * Starta session-inspelning
      */
-    function collectURLs() {
+    function startSessionRecording() {
+        const sessionLabel = currentSessionLabelInput.value.trim();
         const targetUrl = targetUrlInput.value.trim();
-        const sessionLabel = sessionLabelInput.value.trim();
-        
-        // Validering
-        if (!targetUrl) {
-            showError(collectionStatus, 'Target URL krävs');
-            targetUrlInput.focus();
-            return;
-        }
         
         if (!sessionLabel) {
-            showError(collectionStatus, 'Sessionsetikett krävs');
-            sessionLabelInput.focus();
+            showError(sessionRecordingStatus, 'Sessionsetikett krävs');
+            currentSessionLabelInput.focus();
             return;
         }
         
-        // Validera URL-format
-        try {
-            new URL(targetUrl.startsWith('http') ? targetUrl : 'http://' + targetUrl);
-        } catch {
-            showError(collectionStatus, 'Ogiltig URL-format');
-            targetUrlInput.focus();
+        if (!targetUrl) {
+            showError(sessionRecordingStatus, 'Target URL krävs');
             return;
         }
         
-        setButtonLoading(collectUrlsBtn, 'Samlar URL:er...');
-        collectionStatus.innerHTML = '';
+        setButtonLoading(startSessionBtn, 'Startar inspelning...');
+        sessionRecordingStatus.innerHTML = '';
         
-        fetch('/api/access-control/collect-urls', {
+        fetch('/api/access-control/start-session-recording', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({
-                target_url: targetUrl,
-                session_label: sessionLabel
+                session_label: sessionLabel,
+                target_url: targetUrl
             })
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Skapa framgångsmeddelande med detaljer
-                let successHtml = `
-                    <div class="alert alert-success">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-check-circle-fill me-2"></i>
-                            <div>
-                                <strong>Framgång!</strong> Samlade ${data.url_count} URL:er för session "${data.session_label}"
-                                <br><small class="text-muted">Fil: ${data.filename}</small>
-                            </div>
-                        </div>
-                `;
+                isRecording = true;
+                currentRecordingSession = {
+                    label: sessionLabel,
+                    target_url: targetUrl,
+                    start_time: new Date()
+                };
                 
-                // Visa kategorier om tillgängliga
-                if (data.categories && Object.keys(data.categories).length > 0) {
-                    successHtml += '<div class="mt-2"><strong>Kategorier:</strong><br>';
-                    for (const [category, count] of Object.entries(data.categories)) {
-                        successHtml += `<span class="badge bg-info category-badge">${category}: ${count}</span>`;
-                    }
-                    successHtml += '</div>';
-                }
+                // Uppdatera UI för inspelningsläge
+                startSessionBtn.style.display = 'none';
+                stopSessionBtn.style.display = 'inline-block';
+                recordingInstructions.style.display = 'block';
+                targetDisplay.textContent = targetUrl;
+                roleDisplay.textContent = sessionLabel;
                 
-                // Visa preview av URL:er
-                if (data.preview_urls && data.preview_urls.length > 0) {
-                    successHtml += '<div class="mt-2"><strong>Exempel URL:er:</strong><ul class="list-unstyled mt-1">';
-                    data.preview_urls.slice(0, 3).forEach(url => {
-                        const categoryClass = getCategoryClass(url.category);
-                        successHtml += `
-                            <li class="mb-1">
-                                <span class="badge ${categoryClass} me-1">${url.method}</span>
-                                <code class="url-display">${truncateUrl(url.url, 60)}</code>
-                            </li>
-                        `;
-                    });
-                    if (data.preview_urls.length > 3) {
-                        successHtml += `<li class="text-muted">...och ${data.preview_urls.length - 3} till</li>`;
-                    }
-                    successHtml += '</ul></div>';
-                }
+                // Disable andra kontroller under inspelning
+                currentSessionLabelInput.disabled = true;
+                resetZapBtn.disabled = true;
                 
-                successHtml += '</div>';
-                collectionStatus.innerHTML = successHtml;
+                showSuccess(sessionRecordingStatus, 
+                    `Session-inspelning startad för "${sessionLabel}"`, 
+                    'Inspelning aktiv', 0);
+                    
+                // Lägg till pulsande effekt
+                sessionRecordingStatus.classList.add('recording-active');
                 
-                // Uppdatera sessionslistan
-                loadSessions();
-                
-                // Rensa formuläret för nästa session
-                sessionLabelInput.value = '';
-                sessionLabelInput.focus();
             } else {
-                showError(collectionStatus, data.error);
+                showError(sessionRecordingStatus, data.error);
             }
         })
         .catch(error => {
-            console.error('Error collecting URLs:', error);
-            showError(collectionStatus, `Nätverksfel: ${error.message}`);
+            console.error('Error starting session recording:', error);
+            showError(sessionRecordingStatus, `Nätverksfel: ${error.message}`);
         })
         .finally(() => {
-            resetButtonLoading(collectUrlsBtn, '<i class="bi bi-collection"></i> Samla URL:er från nuvarande ZAP-session');
+            resetButtonLoading(startSessionBtn, '<i class="bi bi-play"></i> Starta session-inspelning');
         });
     }
     
     /**
-     * Ladda lista över insamlade sessioner
+     * Stoppa session-inspelning och spara data
      */
-    function loadSessions() {
-        sessionsList.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Laddar sessioner...</div>';
+    function stopSessionRecording() {
+        if (!currentRecordingSession) {
+            showError(sessionRecordingStatus, 'Ingen aktiv session att stoppa');
+            return;
+        }
         
+        setButtonLoading(stopSessionBtn, 'Stoppar och sparar...');
+        
+        fetch('/api/access-control/stop-session-recording', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                session_label: currentRecordingSession.label,
+                target_url: currentRecordingSession.target_url
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                isRecording = false;
+                currentRecordingSession = null;
+                
+                // Återställ UI
+                startSessionBtn.style.display = 'inline-block';
+                stopSessionBtn.style.display = 'none';
+                recordingInstructions.style.display = 'none';
+                
+                // Återaktivera kontroller
+                currentSessionLabelInput.disabled = false;
+                resetZapBtn.disabled = false;
+                
+                // Rensa sessionsetikett för nästa session
+                currentSessionLabelInput.value = '';
+                
+                sessionRecordingStatus.classList.remove('recording-active');
+                
+                showSuccess(sessionRecordingStatus, 
+                    `Session sparad: ${data.url_count} URL:er och ${data.cookies_found ? 'cookies' : 'inga cookies'} från "${data.session_label}"`,
+                    'Session sparad', 5000);
+                
+                // Uppdatera listor
+                loadSavedSessions();
+                
+            } else {
+                showError(sessionRecordingStatus, data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error stopping session recording:', error);
+            showError(sessionRecordingStatus, `Nätverksfel: ${error.message}`);
+        })
+        .finally(() => {
+            resetButtonLoading(stopSessionBtn, '<i class="bi bi-stop"></i> Stoppa och spara session');
+        });
+    }
+    
+    /**
+     * Ladda sparade sessioner
+     */
+    function loadSavedSessions() {
         fetch('/api/access-control/sessions')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                displaySessions(data.sessions);
-                populateSessionSelect(data.sessions);
+                displaySavedSessions(data.sessions);
+                populateSessionDropdowns(data.sessions);
             } else {
-                sessionsList.innerHTML = `<div class="alert alert-danger">Fel: ${data.error}</div>`;
+                savedSessions.innerHTML = `<div class="alert alert-warning">Fel vid laddning: ${data.error}</div>`;
             }
         })
         .catch(error => {
             console.error('Error loading sessions:', error);
-            sessionsList.innerHTML = `<div class="alert alert-danger">Nätverksfel: ${error.message}</div>`;
+            savedSessions.innerHTML = `<div class="alert alert-danger">Nätverksfel: ${error.message}</div>`;
         });
     }
     
     /**
-     * Visa sessioner i UI med förbättrad styling
+     * Visa sparade sessioner
      */
-    function displaySessions(sessions) {
+    function displaySavedSessions(sessions) {
         if (sessions.length === 0) {
-            sessionsList.innerHTML = `
-                <div class="alert alert-info">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <div>
-                            <strong>Inga sessioner ännu</strong>
-                            <br>Börja med att logga in som en användare och samla URL:er.
-                        </div>
-                    </div>
+            savedSessions.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="bi bi-folder"></i>
+                    <p>Inga sparade sessioner ännu</p>
                 </div>
             `;
             return;
         }
         
         let html = '';
-        
-        sessions.forEach((session, index) => {
-            const date = new Date(session.collection_time * 1000);
-            const relativeTime = getRelativeTime(date);
+        sessions.forEach(session => {
             const sessionClass = getSessionClass(session.session_label);
-            
             html += `
-                <div class="session-card mb-3">
-                    <div class="session-header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <span class="risk-indicator ${sessionClass}"></span>
-                                <h6 class="mb-0">
-                                    <span class="badge bg-primary">${escapeHtml(session.session_label)}</span>
-                                    <span class="text-muted ms-2">${session.url_count} URL:er</span>
-                                </h6>
+                <div class="card mb-2 session-card ${sessionClass}">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">${escapeHtml(session.session_label)}</h6>
+                                <small class="text-muted">${formatDate(session.timestamp)}</small>
                             </div>
-                            <small class="text-muted">${relativeTime}</small>
+                            <div class="text-end">
+                                <span class="badge bg-primary">${session.url_count} URLs</span>
+                                ${session.has_cookies ? '<span class="badge bg-success ms-1">🍪</span>' : '<span class="badge bg-secondary ms-1">No cookies</span>'}
+                            </div>
                         </div>
-                    </div>
-                    <div class="session-body">
-                        <div class="mb-2">
-                            <strong>Target:</strong> 
-                            <code class="url-display">${escapeHtml(session.target_url)}</code>
+                        <div class="mt-1">
+                            <small class="text-muted">${escapeHtml(session.target_url)}</small>
                         </div>
-            `;
-            
-            // Visa kategorier
-            if (session.categories && Object.keys(session.categories).length > 0) {
-                html += '<div><strong>Kategorier:</strong><br>';
-                for (const [category, count] of Object.entries(session.categories)) {
-                    const categoryClass = getCategoryClass(category);
-                    html += `<span class="badge ${categoryClass} category-badge">${category}: ${count}</span>`;
-                }
-                html += '</div>';
-            }
-            
-            html += `
                     </div>
                 </div>
             `;
         });
         
-        sessionsList.innerHTML = html;
+        savedSessions.innerHTML = html;
     }
     
     /**
-     * Populera session select dropdown
+     * Populera dropdown-menyer med sessioner
      */
-    function populateSessionSelect(sessions) {
-        const currentValue = sourceSessionSelect.value;
-        sourceSessionSelect.innerHTML = '<option value="">Välj session...</option>';
+    function populateSessionDropdowns(sessions) {
+        // Rensa och populera URL dropdown
+        const currentUrlValue = urlsFromSessionSelect.value;
+        urlsFromSessionSelect.innerHTML = '<option value="">Välj session med URL:er...</option>';
+        
+        // Rensa och populera credentials dropdown  
+        const currentCredValue = credentialsFromSessionSelect.value;
+        credentialsFromSessionSelect.innerHTML = '<option value="">Välj session med credentials...</option>';
         
         sessions.forEach(session => {
-            const option = document.createElement('option');
-            option.value = session.filename;
-            option.textContent = `${session.session_label} (${session.url_count} URL:er)`;
-            if (session.filename === currentValue) {
-                option.selected = true;
+            // URL dropdown - alla sessioner med URLs
+            if (session.url_count > 0) {
+                const urlOption = document.createElement('option');
+                urlOption.value = session.filename;
+                urlOption.textContent = `${session.session_label} (${session.url_count} URL:er)`;
+                if (session.filename === currentUrlValue) {
+                    urlOption.selected = true;
+                }
+                urlsFromSessionSelect.appendChild(urlOption);
             }
-            sourceSessionSelect.appendChild(option);
+            
+            // Credentials dropdown - alla sessioner (även utan cookies för "ej inloggad" test)
+            const credOption = document.createElement('option');
+            credOption.value = session.filename;
+            const cookieText = session.has_cookies ? '🍪' : '(ej inloggad)';
+            credOption.textContent = `${session.session_label} ${cookieText}`;
+            if (session.filename === currentCredValue) {
+                credOption.selected = true;
+            }
+            credentialsFromSessionSelect.appendChild(credOption);
         });
-    }
-    
-    /**
-     * Extrahera cookies från ZAP
-     */
-    function extractCookies() {
-        setButtonLoading(extractCookiesBtn, 'Hämtar cookies...');
         
-        fetch('/api/access-control/extract-cookies')
-        .then(response => {
-            // Hantera både lyckade och misslyckade HTTP-svar
-            if (!response.ok) {
-                return response.json().then(errorData => {
-                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success && data.cookies) {
-                testCookiesInput.value = data.cookies;
-                testCookiesInput.classList.add('is-valid');
-                setTimeout(() => testCookiesInput.classList.remove('is-valid'), 3000);
-                
-                showSuccess(testStatus, 
-                    `Cookies extraherade från ${data.target_url || 'ZAP'}`, 
-                    'Framgång', 5000);
-            } else {
-                testCookiesInput.classList.add('is-invalid');
-                setTimeout(() => testCookiesInput.classList.remove('is-invalid'), 3000);
-                
-                // Visa förslag om de finns
-                let errorMessage = data.error || 'Inga cookies hittades i ZAP';
-                if (data.suggestions && data.suggestions.length > 0) {
-                    errorMessage += '<br><br><strong>Förslag:</strong><ul>';
-                    data.suggestions.forEach(suggestion => {
-                        errorMessage += `<li>${suggestion}</li>`;
-                    });
-                    errorMessage += '</ul>';
-                }
-                
-                // Lägg till debug-knapp för felsökning
-                errorMessage += '<br><button id="debug-cookies-btn" class="btn btn-sm btn-outline-secondary mt-2">Debug cookie-extraktion</button>';
-                
-                showError(testStatus, errorMessage, 'Inga cookies hittades', 10000);
-                
-                // Lägg till event listener för debug-knappen
-                setTimeout(() => {
-                    const debugBtn = document.getElementById('debug-cookies-btn');
-                    if (debugBtn) {
-                        debugBtn.addEventListener('click', debugCookieExtraction);
-                    }
-                }, 100);
-            }
-        })
-        .catch(error => {
-            console.error('Error extracting cookies:', error);
-            testCookiesInput.classList.add('is-invalid');
-            setTimeout(() => testCookiesInput.classList.remove('is-invalid'), 3000);
-            
-            let errorMessage = `Fel vid cookie-extraktion: ${error.message}`;
-            
-            // Lägg till specifika felmeddelanden för vanliga problem
-            if (error.message.includes('Target URL')) {
-                errorMessage += '<br><br><strong>Lösning:</strong> Gå till startsidan och konfigurera ett mål-URL först.';
-            } else if (error.message.includes('ZAP är inte tillgänglig')) {
-                errorMessage += '<br><br><strong>Lösning:</strong> Kontrollera att ZAP körs och är ansluten.';
-            }
-            
-            errorMessage += '<br><button id="debug-cookies-btn" class="btn btn-sm btn-outline-secondary mt-2">Debug cookie-extraktion</button>';
-            
-            showError(testStatus, errorMessage, 'Fel', 10000);
-            
-            // Lägg till event listener för debug-knappen
-            setTimeout(() => {
-                const debugBtn = document.getElementById('debug-cookies-btn');
-                if (debugBtn) {
-                    debugBtn.addEventListener('click', debugCookieExtraction);
-                }
-            }, 100);
-        })
-        .finally(() => {
-            resetButtonLoading(extractCookiesBtn, '<i class="bi bi-download"></i> Extrahera från ZAP');
-        });
+        // Validera test-konfiguration
+        validateTestConfiguration();
     }
     
     /**
-     * Debug-funktion för cookie-extraktion
+     * Validera test-konfiguration och aktivera/inaktivera test-knappen
      */
-    function debugCookieExtraction() {
-        const debugBtn = document.getElementById('debug-cookies-btn');
-        if (debugBtn) {
-            debugBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analyserar...';
-            debugBtn.disabled = true;
+    function validateTestConfiguration() {
+        const hasUrls = urlsFromSessionSelect.value !== '';
+        const hasCredentials = credentialsFromSessionSelect.value !== '';
+        
+        startAccessTestBtn.disabled = !(hasUrls && hasCredentials);
+        
+        if (hasUrls && hasCredentials) {
+            const urlSession = urlsFromSessionSelect.options[urlsFromSessionSelect.selectedIndex].text;
+            const credSession = credentialsFromSessionSelect.options[credentialsFromSessionSelect.selectedIndex].text;
+            
+            // Automatisk testbeskrivning om inget angivet
+            if (!testDescriptionInput.value.trim()) {
+                testDescriptionInput.value = `Testa åtkomst: URL:er från ${urlSession.split(' (')[0]} med credentials från ${credSession.split(' ')[0]}`;
+            }
         }
-        
-        fetch('/api/access-control/debug-cookies')
-        .then(response => response.json())
-        .then(data => {
-            // Skapa debug-modal
-            const modalHtml = `
-                <div class="modal fade" id="debugModal" tabindex="-1">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Cookie-extraktion Debug Information</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <h6>ZAP Status</h6>
-                                <p><strong>Tillgänglig:</strong> ${data.zap_available ? '✅ Ja' : '❌ Nej'}</p>
-                                
-                                <h6>Session Data</h6>
-                                <p><strong>Har target_url:</strong> ${data.session_data.has_target_url ? '✅ Ja' : '❌ Nej'}</p>
-                                <p><strong>Target URL:</strong> <code>${data.session_data.target_url}</code></p>
-                                <p><strong>Session-nycklar:</strong> ${data.session_data.all_keys.join(', ')}</p>
-                                
-                                <h6>ZAP Sites</h6>
-                                ${data.zap_sites.length > 0 ? 
-                                    `<ul>${data.zap_sites.map(site => `<li><code>${site}</code></li>`).join('')}</ul>` : 
-                                    '<p>Inga sites hittades i ZAP</p>'
-                                }
-                                
-                                <h6>Target URL Källor</h6>
-                                <ul>
-                                    <li><strong>Session:</strong> ${data.target_url_sources.session || 'Ingen'}</li>
-                                    <li><strong>Query parameter:</strong> ${data.target_url_sources.query_param || 'Ingen'}</li>
-                                    <li><strong>Första ZAP site:</strong> ${data.target_url_sources.first_zap_site || 'Ingen'}</li>
-                                </ul>
-                                
-                                ${data.cookie_test ? `
-                                    <h6>Cookie Test</h6>
-                                    <p><strong>Framgång:</strong> ${data.cookie_test.success ? '✅ Ja' : '❌ Nej'}</p>
-                                    ${data.cookie_test.success ? 
-                                        `<p><strong>Cookies längd:</strong> ${data.cookie_test.cookies_length} tecken</p>
-                                        <p><strong>Preview:</strong> <code>${data.cookie_test.cookies_preview}</code></p>` :
-                                        `<p><strong>Fel:</strong> ${data.cookie_test.error}</p>`
-                                    }
-                                ` : ''}
-                                
-                                ${data.error ? `<div class="alert alert-danger mt-3">Fel: ${data.error}</div>` : ''}
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Stäng</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // Ta bort befintlig modal om den finns
-            const existingModal = document.getElementById('debugModal');
-            if (existingModal) {
-                existingModal.remove();
-            }
-            
-            // Lägg till ny modal
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-            
-            // Visa modal
-            const modal = new bootstrap.Modal(document.getElementById('debugModal'));
-            modal.show();
-            
-            // Rensa modal när den stängs
-            document.getElementById('debugModal').addEventListener('hidden.bs.modal', function() {
-                this.remove();
-            });
-        })
-        .catch(error => {
-            console.error('Error getting debug info:', error);
-            alert('Kunde inte hämta debug-information: ' + error.message);
-        })
-        .finally(() => {
-            if (debugBtn) {
-                debugBtn.innerHTML = 'Debug cookie-extraktion';
-                debugBtn.disabled = false;
-            }
-        });
     }
-
+    
     /**
      * Starta Access Control Test
      */
     function startAccessControlTest() {
-        const sourceSessionFile = sourceSessionSelect.value;
-        const testLabel = testLabelInput.value.trim();
-        const testCookies = testCookiesInput.value.trim();
+        const urlsFromSession = urlsFromSessionSelect.value;
+        const credentialsFromSession = credentialsFromSessionSelect.value;
+        const testDescription = testDescriptionInput.value.trim();
         
-        // Validering
-        if (!sourceSessionFile) {
-            showError(testStatus, 'Välj en käll-session att testa');
-            sourceSessionSelect.focus();
+        if (!urlsFromSession || !credentialsFromSession) {
+            showError(testStatus, 'Både URL-session och credentials-session måste väljas');
             return;
         }
         
-        if (!testLabel) {
-            showError(testStatus, 'Test-etikett krävs');
-            testLabelInput.focus();
-            return;
-        }
-        
-        setButtonLoading(startTestBtn, 'Kör test...');
+        setButtonLoading(startAccessTestBtn, 'Startar Access Control Test...');
         testStatus.innerHTML = '';
         
-        // Visa testflöde
-        showTestProgress();
-        
-        fetch('/api/access-control/test', {
+        fetch('/api/access-control/test-with-sessions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({
-                source_session_file: sourceSessionFile,
-                test_cookies: testCookies,
-                test_label: testLabel
+                urls_from_session: urlsFromSession,
+                credentials_from_session: credentialsFromSession,
+                test_description: testDescription
             })
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                displayTestResult(data);
-                loadTestResults();
+                showSuccess(testStatus, 
+                    `Access Control Test startat: ${data.test_count} URL:er att testa`,
+                    'Test startat', 5000);
+                
+                // Uppdatera resultat efter en kort fördröjning
+                setTimeout(loadTestResults, 2000);
             } else {
                 showError(testStatus, data.error);
             }
         })
         .catch(error => {
-            console.error('Error starting test:', error);
+            console.error('Error starting access control test:', error);
             showError(testStatus, `Nätverksfel: ${error.message}`);
         })
         .finally(() => {
-            resetButtonLoading(startTestBtn, '<i class="bi bi-shield-exclamation"></i> Starta Access Control Test');
+            resetButtonLoading(startAccessTestBtn, '<i class="bi bi-shield-check"></i> Starta Access Control Test');
         });
-    }
-    
-    /**
-     * Visa testresultat med förbättrad styling
-     */
-    function displayTestResult(data) {
-        let alertClass = 'alert-success';
-        let icon = 'bi-check-circle-fill';
-        let riskClass = 'low';
-        
-        // Bestäm stil baserat på resultat
-        if (data.analysis && data.analysis.by_risk_level) {
-            const criticalCount = data.analysis.by_risk_level.CRITICAL || 0;
-            const highCount = data.analysis.by_risk_level.HIGH || 0;
-            
-            if (criticalCount > 0) {
-                alertClass = 'alert-danger';
-                icon = 'bi-exclamation-triangle-fill';
-                riskClass = 'critical';
-            } else if (highCount > 0) {
-                alertClass = 'alert-warning';
-                icon = 'bi-exclamation-circle-fill';
-                riskClass = 'high';
-            }
-        }
-        
-        let html = `
-            <div class="alert ${alertClass} test-result-card">
-                <div class="d-flex align-items-start">
-                    <div class="risk-indicator ${riskClass} mt-1"></div>
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <h5 class="alert-heading mb-2">
-                                <i class="${icon}"></i> Test slutfört!
-                            </h5>
-                            <span class="badge bg-light text-dark">${data.total_tested} URL:er testade</span>
-                        </div>
-                        <p class="mb-2"><strong>${data.analysis ? data.analysis.summary : 'Test slutfört'}</strong></p>
-                        <small class="text-muted">Resultat sparade i: ${data.test_filename}</small>
-        `;
-        
-        // Visa risk-fördelning
-        if (data.analysis && data.analysis.by_risk_level) {
-            html += '<div class="mt-3"><strong>Risk-fördelning:</strong><br>';
-            for (const [risk, count] of Object.entries(data.analysis.by_risk_level)) {
-                if (count > 0) {
-                    const badgeClass = getRiskBadgeClass(risk);
-                    html += `<span class="badge ${badgeClass} me-1">${risk}: ${count}</span>`;
-                }
-            }
-            html += '</div>';
-        }
-        
-        // Visa kritiska fynd
-        if (data.high_risk_findings && data.high_risk_findings.length > 0) {
-            html += '<div class="mt-3"><strong>Kritiska fynd:</strong><ul class="mb-0">';
-            data.high_risk_findings.slice(0, 3).forEach(finding => {
-                html += `<li><code>${truncateUrl(finding.url, 50)}</code> - ${finding.description}</li>`;
-            });
-            if (data.high_risk_findings.length > 3) {
-                html += `<li class="text-muted">...och ${data.high_risk_findings.length - 3} till</li>`;
-            }
-            html += '</ul></div>';
-        }
-        
-        html += '</div></div></div>';
-        testStatus.innerHTML = html;
-    }
-    
-    /**
-     * Visa testframsteg
-     */
-    function showTestProgress() {
-        const progressHtml = `
-            <div class="test-progress mb-3">
-                <div class="progress">
-                    <div class="progress-bar test-running" role="progressbar" style="width: 100%">
-                        <span class="spinner-border spinner-border-sm me-2"></span>Testar URL:er...
-                    </div>
-                </div>
-            </div>
-        `;
-        testStatus.innerHTML = progressHtml;
     }
     
     /**
      * Ladda testresultat
      */
     function loadTestResults() {
-        if (!testResults) return;
-        
-        testResults.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Laddar testresultat...</div>';
-        
         fetch('/api/access-control/test-results')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                displayTestResults(data.tests);
+                displayTestResults(data.results);
             } else {
-                testResults.innerHTML = `<div class="alert alert-danger">Fel: ${data.error}</div>`;
+                testResults.innerHTML = `<div class="alert alert-warning">Fel vid laddning av resultat: ${data.error}</div>`;
             }
         })
         .catch(error => {
             console.error('Error loading test results:', error);
-            testResults.innerHTML = `<div class="alert alert-danger">Nätverksfel: ${error.message}</div>`;
+            testResults.innerHTML = `<div class="alert alert-danger">Nätverksfel vid laddning av resultat: ${error.message}</div>`;
         });
     }
     
     /**
-     * Visa testresultat med förbättrad styling
+     * Visa testresultat
      */
-    function displayTestResults(tests) {
-        if (tests.length === 0) {
+    function displayTestResults(results) {
+        if (results.length === 0) {
             testResults.innerHTML = `
-                <div class="alert alert-info">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <span>Inga testresultat ännu.</span>
-                    </div>
+                <div class="text-center text-muted">
+                    <i class="bi bi-clipboard-data"></i>
+                    <p>Inga testresultat ännu. Kör ett Access Control Test för att se resultat.</p>
                 </div>
             `;
             return;
         }
         
         let html = '';
-        
-        // Visa bara de 5 senaste testerna här
-        const recentTests = tests.slice(0, 5);
-        
-        recentTests.forEach(test => {
-            const date = new Date(test.test_time * 1000);
-            const relativeTime = getRelativeTime(date);
-            
-            // Bestäm övergripande risk-status
-            let cardClass = 'border-success';
-            let riskClass = 'low';
-            let statusIcon = 'bi-shield-check';
-            
-            if (test.risk_counts.CRITICAL > 0) {
-                cardClass = 'border-danger';
-                riskClass = 'critical';
-                statusIcon = 'bi-shield-exclamation';
-            } else if (test.risk_counts.HIGH > 0) {
-                cardClass = 'border-warning';
-                riskClass = 'high';
-                statusIcon = 'bi-shield-x';
-            } else if (test.risk_counts.MEDIUM > 0) {
-                cardClass = 'border-info';
-                riskClass = 'medium';
-                statusIcon = 'bi-shield-minus';
-            }
-            
+        results.forEach(result => {
+            const riskClass = getRiskBadgeClass(result.risk_level);
             html += `
-                <div class="card mb-3 test-result-card ${cardClass}">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <div class="d-flex align-items-center">
-                                <div class="risk-indicator ${riskClass} me-2"></div>
-                                <div>
-                                    <h6 class="mb-1">
-                                        <span class="badge bg-info">${escapeHtml(test.source_session_label)}</span>
-                                        <i class="bi bi-arrow-right mx-1"></i>
-                                        <span class="badge bg-secondary">${escapeHtml(test.test_label)}</span>
-                                    </h6>
-                                    <small class="text-muted">${test.total_tested} URL:er testade • ${relativeTime}</small>
-                                </div>
-                            </div>
-                            <i class="${statusIcon}" style="font-size: 1.5rem;"></i>
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">${escapeHtml(result.test_description || 'Access Control Test')}</h6>
+                        <div>
+                            <span class="badge ${riskClass}">${result.risk_level}</span>
+                            <small class="text-muted ms-2">${formatDate(result.timestamp)}</small>
                         </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>URL:er testade:</strong> ${result.total_tests}</p>
+                                <p><strong>Potentiella problem:</strong> ${result.potential_issues}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>URL-session:</strong> ${escapeHtml(result.url_session)}</p>
+                                <p><strong>Credentials-session:</strong> ${escapeHtml(result.credentials_session)}</p>
+                            </div>
+                        </div>
+                        
+                        ${result.issues && result.issues.length > 0 ? `
+                            <h6 class="mt-3">Upptäckta problem:</h6>
+                            <ul class="list-group list-group-flush">
+                                ${result.issues.map(issue => `
+                                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>${escapeHtml(issue.url)}</strong>
+                                            <br><small class="text-muted">${escapeHtml(issue.description)}</small>
+                                        </div>
+                                        <span class="badge ${getRiskBadgeClass(issue.severity)}">${issue.severity}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        ` : '<p class="text-success">Inga access control-problem upptäckta ✅</p>'}
+                    </div>
+                </div>
             `;
-            
-            // Visa risk-badges
-            if (test.risk_counts && Object.keys(test.risk_counts).length > 0) {
-                html += '<div class="mt-2">';
-                for (const [risk, count] of Object.entries(test.risk_counts)) {
-                    if (count > 0) {
-                        const badgeClass = getRiskBadgeClass(risk);
-                        html += `<span class="badge ${badgeClass} me-1">${risk}: ${count}</span>`;
-                    }
-                }
-                html += '</div>';
-            }
-            
-            html += '</div></div>';
         });
         
         testResults.innerHTML = html;
     }
     
-    // === Hjälpfunktioner ===
+    // Helper functions
+    function clearAllForms() {
+        currentSessionLabelInput.value = '';
+        testDescriptionInput.value = '';
+        urlsFromSessionSelect.innerHTML = '<option value="">Välj session med URL:er...</option>';
+        credentialsFromSessionSelect.innerHTML = '<option value="">Välj session med credentials...</option>';
+        startAccessTestBtn.disabled = true;
+    }
     
     function setButtonLoading(button, text) {
         button.disabled = true;
-        button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span> ${text}`;
+        button.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status"></span>${text}`;
     }
     
     function resetButtonLoading(button, originalHtml) {
@@ -726,44 +484,28 @@ document.addEventListener('DOMContentLoaded', function() {
         button.innerHTML = originalHtml;
     }
     
-    function showError(element, message, title = 'Fel', timeout = 0) {
-        const html = `
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="bi bi-exclamation-circle"></i> <strong>${title}:</strong> ${message}
+    function showSuccess(element, message, title = 'Framgång', duration = 5000) {
+        element.innerHTML = `
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <strong>${title}:</strong> ${message}
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         `;
-        element.innerHTML = html;
         
-        if (timeout > 0) {
+        if (duration > 0) {
             setTimeout(() => {
-                const alert = element.querySelector('.alert');
-                if (alert) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }
-            }, timeout);
+                element.innerHTML = '';
+            }, duration);
         }
     }
     
-    function showSuccess(element, message, title = 'Framgång', timeout = 0) {
-        const html = `
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="bi bi-check-circle"></i> <strong>${title}:</strong> ${message}
+    function showError(element, message) {
+        element.innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Fel:</strong> ${message}
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         `;
-        element.innerHTML = html;
-        
-        if (timeout > 0) {
-            setTimeout(() => {
-                const alert = element.querySelector('.alert');
-                if (alert) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }
-            }, timeout);
-        }
     }
     
     function getCSRFToken() {
@@ -776,44 +518,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return div.innerHTML;
     }
     
-    function truncateUrl(url, maxLength) {
-        if (url.length <= maxLength) return url;
-        return url.substring(0, maxLength - 3) + '...';
-    }
-    
-    function getRelativeTime(date) {
-        const now = new Date();
-        const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-        
-        if (diffMins < 1) return 'Just nu';
-        if (diffMins < 60) return `${diffMins} min sedan`;
-        if (diffHours < 24) return `${diffHours} tim sedan`;
-        if (diffDays < 7) return `${diffDays} dag${diffDays > 1 ? 'ar' : ''} sedan`;
-        return date.toLocaleDateString();
-    }
-    
-    function getCategoryClass(category) {
-        const categoryClasses = {
-            'admin': 'bg-danger',
-            'user_data': 'bg-warning',
-            'api': 'bg-info',
-            'file_operations': 'bg-primary',
-            'authentication': 'bg-success',
-            'reports': 'bg-secondary',
-            'other': 'bg-light text-dark'
-        };
-        return categoryClasses[category] || 'bg-light text-dark';
+    function formatDate(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleDateString('sv-SE') + ' ' + date.toLocaleTimeString('sv-SE');
     }
     
     function getSessionClass(sessionLabel) {
         const label = sessionLabel.toLowerCase();
-        if (label.includes('admin') || label.includes('root')) return 'critical';
-        if (label.includes('manager') || label.includes('supervisor')) return 'high';
-        if (label.includes('user') || label.includes('member')) return 'medium';
-        return 'low';
+        if (label.includes('admin') || label.includes('root')) return 'session-critical';
+        if (label.includes('manager') || label.includes('supervisor')) return 'session-high';
+        if (label.includes('user') || label.includes('member')) return 'session-medium';
+        return 'session-low';
     }
     
     function getRiskBadgeClass(risk) {

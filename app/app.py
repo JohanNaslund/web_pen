@@ -23,6 +23,8 @@ import traceback
 import socket
 import subprocess
 
+active_recordings = {}
+
 #from modules.sql_injection_tester import SQLInjectionTester
 
 from modules.access_control_manager import AccessControlManager
@@ -117,10 +119,9 @@ session_manager = SessionManager(storage_path='./data/sessions')
 access_control_manager = AccessControlManager(zap)
 
 
-
 @app.route('/access-control')
 def access_control():
-    """Access Control Testing huvudsida med korrekt target-integration"""
+    """Access Control Testing huvudsida med förbättrad session-hantering"""
     
     # Kontrollera om det finns ett mål-URL från huvudkonfigurationen
     target_url = session.get('target_url', '')
@@ -130,12 +131,28 @@ def access_control():
         return redirect(url_for('target'))
     
     # Kontrollera att ZAP är tillgänglig
-    if not zap.is_available():
+    zap_available = zap.is_available()
+    if not zap_available:
         flash("ZAP är inte tillgänglig. Kontrollera att ZAP körs.", "danger")
     
-    return render_template('access_control.html', 
+    # Kontrollera om det finns en aktiv inspelning
+    recording_id = session.get('active_recording_id')
+    is_recording = recording_id and recording_id in active_recordings
+    
+    # Hämta information om aktiv inspelning om den finns
+    recording_data = None
+    if is_recording:
+        recording_data = active_recordings[recording_id]
+        # Lägg till duration
+        current_time = time.time()
+        recording_data['duration'] = current_time - recording_data['start_timestamp']
+        recording_data['duration_formatted'] = f"{int(recording_data['duration']//60):02d}:{int(recording_data['duration']%60):02d}"
+    
+    return render_template('access_control.html',  # Ändra till den nya templaten
                           target_url=target_url,
-                          zap_available=zap.is_available())
+                          zap_available=zap_available,
+                          is_recording=is_recording,
+                          recording_data=recording_data)
 
 @app.route('/api/access-control/reset-zap', methods=['POST'])
 def api_access_control_reset_zap():
@@ -2830,71 +2847,6 @@ def api_access_control_debug_cookies():
         debug_info['error'] = str(e)
         return jsonify(debug_info), 500
 
-@app.route('/api/access-control/test-results')
-def api_access_control_test_results():
-    """Lista alla access control testresultat"""
-    try:
-        # Läs alla testfiler från tests-katalogen
-        tests_dir = access_control_manager.tests_dir
-        test_results = []
-        
-        if not os.path.exists(tests_dir):
-            return jsonify({
-                'success': True,
-                'tests': []
-            })
-        
-        # Läs alla testfiler
-        for filename in os.listdir(tests_dir):
-            if filename.startswith('test_') and filename.endswith('.json'):
-                filepath = os.path.join(tests_dir, filename)
-                
-                try:
-                    with open(filepath, 'r') as f:
-                        test_data = json.load(f)
-                    
-                    # Räkna risk-fördelning
-                    risk_counts = {
-                        'CRITICAL': 0,
-                        'HIGH': 0,
-                        'MEDIUM': 0,
-                        'LOW': 0,
-                        'ERROR': 0
-                    }
-                    
-                    for result in test_data.get('results', []):
-                        risk_level = result.get('risk_level', 'ERROR')
-                        if risk_level in risk_counts:
-                            risk_counts[risk_level] += 1
-                    
-                    # Skapa sammanfattning för UI
-                    test_summary = {
-                        'filename': filename,
-                        'test_label': test_data.get('test_label', 'Unknown'),
-                        'source_session_label': test_data.get('source_session_label', 'Unknown'),
-                        'test_time': test_data.get('test_time', 0),
-                        'total_tested': test_data.get('total_tested', 0),
-                        'risk_counts': risk_counts
-                    }
-                    
-                    test_results.append(test_summary)
-                except Exception as e:
-                    app.logger.error(f"Error reading test file {filename}: {str(e)}")
-                    continue
-        
-        # Sortera efter test_time (nyast först)
-        test_results.sort(key=lambda x: x['test_time'], reverse=True)
-        
-        return jsonify({
-            'success': True,
-            'tests': test_results
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 @app.route('/api/access-control/test-details/<test_filename>')
 def api_access_control_test_details(test_filename):
     """Hämta detaljerade resultat från ett specifikt test"""
@@ -2926,6 +2878,304 @@ def api_access_control_test_details(test_filename):
             'success': False,
             'error': str(e)
         }), 500
+
+
+@app.route('/api/access-control/start-session-recording', methods=['POST'])
+def api_access_control_start_session_recording():
+    """Starta session-inspelning med timestamp-märkning"""
+    try:
+        data = request.json
+        session_label = data.get('session_label', '').strip()
+        target_url = data.get('target_url', '').strip()
+        
+        if not session_label:
+            return jsonify({
+                'success': False,
+                'error': 'Sessionsetikett krävs'
+            }), 400
+            
+        if not target_url:
+            return jsonify({
+                'success': False,
+                'error': 'Target URL krävs'
+            }), 400
+        
+        # Kontrollera att ZAP är tillgänglig
+        if not zap.is_available():
+            return jsonify({
+                'success': False,
+                'error': 'ZAP är inte tillgänglig'
+            }), 503
+        
+        # Starta inspelning genom att märka starttid
+        recording_id = f"{session_label}_{int(time.time())}"
+        start_timestamp = time.time()
+        
+        # Spara inspelningsdata
+        active_recordings[recording_id] = {
+            'session_label': session_label,
+            'target_url': target_url,
+            'start_timestamp': start_timestamp,
+            'start_message_count': None  # Räkna meddelanden i ZAP vid start
+        }
+        
+        # Hämta nuvarande antal meddelanden i ZAP som baseline
+        try:
+            messages_result = zap._direct_api_call('core/view/messages', {
+                'baseurl': '',
+                'start': '0',
+                'count': '1'
+            })
+            if messages_result['success']:
+                # Få totalt antal meddelanden
+                total_messages = len(messages_result['data'].get('messages', []))
+                active_recordings[recording_id]['start_message_count'] = total_messages
+        except Exception as e:
+            app.logger.warning(f"Could not get baseline message count: {e}")
+            active_recordings[recording_id]['start_message_count'] = 0
+        
+        # Spara session_id i Flask session för att hålla koll
+        session['active_recording_id'] = recording_id
+        
+        app.logger.info(f"Started session recording: {recording_id}")
+        
+        return jsonify({
+            'success': True,
+            'recording_id': recording_id,
+            'session_label': session_label,
+            'target_url': target_url,
+            'start_timestamp': start_timestamp,
+            'message': f'Session-inspelning startad för "{session_label}"'
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error starting session recording: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/stop-session-recording', methods=['POST'])
+def api_access_control_stop_session_recording():
+    """Stoppa session-inspelning och spara både URLs och cookies från exakt denna period"""
+    try:
+        data = request.json
+        session_label = data.get('session_label', '').strip()
+        target_url = data.get('target_url', '').strip()
+        
+        # Hitta aktiv inspelning
+        recording_id = session.get('active_recording_id')
+        if not recording_id or recording_id not in active_recordings:
+            return jsonify({
+                'success': False,
+                'error': 'Ingen aktiv inspelning hittades'
+            }), 400
+        
+        recording_data = active_recordings[recording_id]
+        stop_timestamp = time.time()
+        
+        # Kontrollera att ZAP är tillgänglig
+        if not zap.is_available():
+            return jsonify({
+                'success': False,
+                'error': 'ZAP är inte tillgänglig'
+            }), 503
+        
+        # Samla URLs och cookies från inspelningsperioden
+        result = access_control_manager.collect_session_data_by_timeframe(
+            session_label=recording_data['session_label'],
+            target_url=recording_data['target_url'],
+            start_timestamp=recording_data['start_timestamp'],
+            stop_timestamp=stop_timestamp,
+            start_message_count=recording_data.get('start_message_count', 0)
+        )
+        
+        if result['success']:
+            # Rensa aktiv inspelning
+            del active_recordings[recording_id]
+            if 'active_recording_id' in session:
+                del session['active_recording_id']
+            
+            app.logger.info(f"Stopped session recording: {recording_id}, collected {result.get('url_count', 0)} URLs")
+            
+            return jsonify({
+                'success': True,
+                'session_label': recording_data['session_label'],
+                'url_count': result.get('url_count', 0),
+                'cookies_found': result.get('cookies_found', False),
+                'filename': result.get('filename', ''),
+                'recording_duration': stop_timestamp - recording_data['start_timestamp'],
+                'message': f'Session sparad: {result.get("url_count", 0)} URL:er samlades'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Okänt fel vid sparande av session')
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error stopping session recording: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/test-with-sessions', methods=['POST'])
+def api_access_control_test_with_sessions():
+    """Testa access control med separata sessions för URLs och credentials"""
+    try:
+        data = request.json
+        urls_from_session = data.get('urls_from_session', '').strip()
+        credentials_from_session = data.get('credentials_from_session', '').strip()
+        test_description = data.get('test_description', '').strip()
+        
+        if not urls_from_session:
+            return jsonify({
+                'success': False,
+                'error': 'URL-session måste väljas'
+            }), 400
+            
+        if not credentials_from_session:
+            return jsonify({
+                'success': False,
+                'error': 'Credentials-session måste väljas'
+            }), 400
+        
+        # Kontrollera att ZAP är tillgänglig
+        if not zap.is_available():
+            return jsonify({
+                'success': False,
+                'error': 'ZAP är inte tillgänglig'
+            }), 503
+        
+        # Starta test med access control manager
+        result = access_control_manager.test_access_control_with_separate_sessions(
+            urls_session_file=urls_from_session,
+            credentials_session_file=credentials_from_session,
+            test_description=test_description
+        )
+        
+        if result['success']:
+            app.logger.info(f"Started access control test: {result.get('test_count', 0)} URLs to test")
+            
+            return jsonify({
+                'success': True,
+                'test_id': result.get('test_id'),
+                'test_count': result.get('test_count', 0),
+                'test_description': test_description,
+                'urls_session': urls_from_session,
+                'credentials_session': credentials_from_session,
+                'message': f'Access Control Test startat: {result.get("test_count", 0)} URL:er att testa'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Okänt fel vid start av test')
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error starting access control test with sessions: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/access-control/test-results')
+def api_access_control_test_results():
+    """Hämta access control testresultat"""
+    try:
+        results = access_control_manager.get_test_results()
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching access control test results: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'results': []
+        }), 500
+
+@app.route('/api/access-control/recording-status')
+def api_access_control_recording_status():
+    """Kontrollera status för aktiv inspelning"""
+    try:
+        recording_id = session.get('active_recording_id')
+        
+        if not recording_id or recording_id not in active_recordings:
+            return jsonify({
+                'success': True,
+                'is_recording': False,
+                'recording_data': None
+            })
+        
+        recording_data = active_recordings[recording_id]
+        current_time = time.time()
+        duration = current_time - recording_data['start_timestamp']
+        
+        return jsonify({
+            'success': True,
+            'is_recording': True,
+            'recording_data': {
+                'recording_id': recording_id,
+                'session_label': recording_data['session_label'],
+                'target_url': recording_data['target_url'],
+                'start_timestamp': recording_data['start_timestamp'],
+                'duration_seconds': duration,
+                'duration_formatted': f"{int(duration//60):02d}:{int(duration%60):02d}"
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting recording status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'is_recording': False
+        }), 500
+
+# Hjälp-endpoint för att rensa upp aktiva inspelningar vid behov
+@app.route('/api/access-control/cleanup-recordings', methods=['POST'])
+def api_access_control_cleanup_recordings():
+    """Rensa upp gamla/hängande inspelningar (admin-funktion)"""
+    try:
+        global active_recordings
+        
+        # Rensa inspelningar äldre än 24 timmar
+        current_time = time.time()
+        cleanup_threshold = 24 * 60 * 60  # 24 timmar
+        
+        recordings_to_remove = []
+        for recording_id, recording_data in active_recordings.items():
+            if current_time - recording_data['start_timestamp'] > cleanup_threshold:
+                recordings_to_remove.append(recording_id)
+        
+        for recording_id in recordings_to_remove:
+            del active_recordings[recording_id]
+        
+        # Rensa även från session om den finns
+        if 'active_recording_id' in session and session['active_recording_id'] in recordings_to_remove:
+            del session['active_recording_id']
+        
+        return jsonify({
+            'success': True,
+            'cleaned_recordings': len(recordings_to_remove),
+            'active_recordings': len(active_recordings),
+            'message': f'Rensade {len(recordings_to_remove)} gamla inspelningar'
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error cleaning up recordings: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+
 
 if __name__ == '__main__':
     test_zap_functionality()

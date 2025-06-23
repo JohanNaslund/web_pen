@@ -280,3 +280,322 @@ pre {
     background-size: 1rem 1rem;
     animation: progress-bar-stripes 1s linear infinite;
 }
+.session-card.session-critical { border-left: 4px solid #dc3545; }
+.session-card.session-high { border-left: 4px solid #fd7e14; }
+.session-card.session-medium { border-left: 4px solid #0dcaf0; }
+.session-card.session-low { border-left: 4px solid #198754; }
+
+.recording-active {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+.session-card {
+    transition: all 0.3s ease;
+    border-radius: 0.5rem;
+}
+
+.session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+}
+
+.session-card.session-critical {
+    border-left: 4px solid #dc3545;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+}
+
+.session-card.session-high {
+    border-left: 4px solid #fd7e14;
+    background: linear-gradient(135deg, #fff8f0 0%, #ffffff 100%);
+}
+
+.session-card.session-medium {
+    border-left: 4px solid #0dcaf0;
+    background: linear-gradient(135deg, #f0fcff 0%, #ffffff 100%);
+}
+
+.session-card.session-low {
+    border-left: 4px solid #198754;
+    background: linear-gradient(135deg, #f0fff4 0%, #ffffff 100%);
+}
+
+/* Aktiv inspelning - pulsande effekt */
+.recording-active {
+    animation: pulse 2s infinite;
+    border: 2px solid #dc3545;
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+}
+
+@keyframes pulse {
+    0% { 
+        opacity: 1; 
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+    }
+    50% { 
+        opacity: 0.8; 
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0.1);
+    }
+    100% { 
+        opacity: 1; 
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
+
+/* Recording-instruktioner med visuell framhävning */
+#recording-instructions {
+    border: 2px solid #dc3545;
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffe6e6 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+#recording-instructions::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -100%;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #dc3545, transparent);
+    animation: recording-scan 3s linear infinite;
+}
+
+@keyframes recording-scan {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Recording-status med glowing-effekt */
+.recording-status-glow {
+    position: relative;
+    background: radial-gradient(circle, rgba(220, 53, 69, 0.1) 0%, transparent 70%);
+}
+
+.recording-status-glow::before {
+    content: '🔴';
+    position: absolute;
+    left: -25px;
+    top: 50%;
+    transform: translateY(-50%);
+    animation: blink 1s ease-in-out infinite alternate;
+}
+
+@keyframes blink {
+    from { opacity: 1; }
+    to { opacity: 0.3; }
+}
+
+/* Session dropdown-stilar */
+.form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.form-select option {
+    padding: 0.5rem;
+}
+
+/* Test-resultats kort med risknivå-indikatorer */
+.test-result-card {
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.test-result-card.risk-critical {
+    border-left: 6px solid #dc3545;
+    box-shadow: 0 0 20px rgba(220, 53, 69, 0.2);
+}
+
+.test-result-card.risk-high {
+    border-left: 6px solid #fd7e14;
+    box-shadow: 0 0 20px rgba(253, 126, 20, 0.2);
+}
+
+.test-result-card.risk-medium {
+    border-left: 6px solid #0dcaf0;
+    box-shadow: 0 0 20px rgba(13, 202, 240, 0.2);
+}
+
+.test-result-card.risk-low {
+    border-left: 6px solid #198754;
+    box-shadow: 0 0 20px rgba(25, 135, 84, 0.2);
+}
+
+/* Workflow-guide med stegindikatorer */
+.workflow-step {
+    position: relative;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.workflow-step:hover {
+    background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%);
+    border-color: #2196f3;
+    transform: translateY(-2px);
+}
+
+.workflow-step h6::before {
+    content: attr(data-step);
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+    color: white;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 2rem;
+    margin-right: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: bold;
+}
+
+/* Button-states för session controls */
+.btn-recording {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border: none;
+    color: white;
+    animation: pulse-button 2s infinite;
+}
+
+@keyframes pulse-button {
+    0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+    border: none;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border: none;
+}
+
+/* Förbättrade alert-stilar */
+.alert {
+    border-radius: 0.5rem;
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.alert-info {
+    background: linear-gradient(135deg, #d1ecf1 0%, #b8daff 100%);
+    color: #0c5460;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    color: #155724;
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    color: #856404;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+}
+
+/* Loading states */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Responsiva anpassningar */
+@media (max-width: 768px) {
+    .session-card {
+        margin-bottom: 0.5rem;
+    }
+    
+    .workflow-step {
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .btn {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+    }
+    
+    #recording-instructions ol {
+        padding-left: 1rem;
+    }
+}
+
+/* Dark mode support (om det används) */
+@media (prefers-color-scheme: dark) {
+    .session-card.session-critical {
+        background: linear-gradient(135deg, #2d1b1b 0%, #1a1a1a 100%);
+    }
+    
+    .session-card.session-high {
+        background: linear-gradient(135deg, #2d2319 0%, #1a1a1a 100%);
+    }
+    
+    .session-card.session-medium {
+        background: linear-gradient(135deg, #192d2d 0%, #1a1a1a 100%);
+    }
+    
+    .session-card.session-low {
+        background: linear-gradient(135deg, #1b2d20 0%, #1a1a1a 100%);
+    }
+}
+
+/* Utility classes */
+.text-recording {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.bg-recording {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+}
+
+.border-recording {
+    border: 2px solid #dc3545;
+}
+
+/* Badge-förbättringar */
+.badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+    border-radius: 0.375rem;
+}
+
+.badge.bg-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+}
+
+.badge.bg-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
+    color: #000;
+}
+
+.badge.bg-info {
+    background: linear-gradient(135deg, #0dcaf0 0%, #0aa2c0 100%) !important;
+}
+
+.badge.bg-success {
+    background: linear-gradient(135deg, #198754 0%, #146c43 100%) !important;
+}

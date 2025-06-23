@@ -22,34 +22,49 @@ class AccessControlManager:
         for dir_path in [self.sessions_dir, self.tests_dir, self.reports_dir]:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
     
+# Uppdaterad AccessControlManager - ersätt reset_for_new_test() metoden i access_control_manager.py
+
     def reset_for_new_test(self):
-        """Nollställ ZAP för access control testing"""
+        """Nollställ ZAP för access control testing och sätt Safe mode"""
         try:
-            # Rensa alerts
+            # Steg 1: Rensa alerts
             alerts_result = self.zap._direct_api_call('core/action/deleteAllAlerts')
             
-            # Skapa ny session
+            # Steg 2: Skapa ny session
             zap_reset_result = self.zap._direct_api_call('core/action/newSession', {
                 'name': 'access_control_session',
                 'overwrite': 'true'
             }, timeout=20)
             
-            if zap_reset_result['success']:
-                return {
-                    'success': True,
-                    'message': 'ZAP reset successful for Access Control Testing'
-                }
-            else:
+            if not zap_reset_result['success']:
                 return {
                     'success': False,
                     'error': 'Failed to reset ZAP session'
                 }
+            
+            # Steg 3: Sätt ZAP till Safe mode för Access Control testing
+            safe_mode_result = self.zap.set_mode('safe')
+            
+            if safe_mode_result:
+                return {
+                    'success': True,
+                    'message': 'ZAP reset successful för Access Control Testing. ZAP är nu i Safe mode - inga attacker kommer att utföras.',
+                    'zap_mode': 'safe'
+                }
+            else:
+                # Om Safe mode misslyckades, ge varning men tillåt fortsättning
+                return {
+                    'success': True,
+                    'message': 'ZAP reset successful för Access Control Testing. Varning: Kunde inte sätta Safe mode - var försiktig med POST/PUT-operationer.',
+                    'warning': 'Failed to set Safe mode',
+                    'zap_mode': 'unknown'
+                }
+                
         except Exception as e:
             return {
                 'success': False,
                 'error': str(e)
-            }
-    
+            }    
     def collect_session_urls(self, session_label, target_url):
         """Samla URL:er från nuvarande ZAP-session med förbättrad scope-hantering"""
         try:
@@ -767,3 +782,486 @@ class AccessControlManager:
             analysis['summary'] = "Inga kritiska access control-problem upptäckta"
         
         return analysis
+    
+
+    def collect_session_data_by_timeframe(self, session_label, target_url, start_timestamp, stop_timestamp, start_message_count=0):
+        """Samla URL:er och cookies från en specifik tidsperiod i ZAP"""
+        try:
+            print(f"[AccessControl] Collecting session data for timeframe: {start_timestamp} - {stop_timestamp}")
+            
+            domain = self._extract_domain_or_ip(target_url)
+            if not domain:
+                return {
+                    'success': False,
+                    'error': 'Kunde inte extrahera domän från target URL'
+                }
+            
+            # Hämta alla meddelanden från ZAP
+            all_messages_result = self.zap._direct_api_call('core/view/messages', {
+                'baseurl': '',
+                'start': str(start_message_count),  # Börja från baseline
+                'count': '10000'  # Stort antal för att få alla nya meddelanden
+            })
+            
+            if not all_messages_result['success']:
+                return {
+                    'success': False,
+                    'error': 'Kunde inte hämta meddelanden från ZAP'
+                }
+            
+            all_messages = all_messages_result['data'].get('messages', [])
+            print(f"[AccessControl] Got {len(all_messages)} messages from ZAP")
+            
+            # Filtrera meddelanden baserat på tid och domän
+            timeframe_messages = []
+            for msg in all_messages:
+                try:
+                    # ZAP timestamp är i millisekunder
+                    msg_timestamp = int(msg.get('timestamp', 0)) / 1000.0
+                    msg_url = msg.get('requestHeader', '').split('\n')[0].split(' ')[1] if msg.get('requestHeader') else ''
+                    
+                    # Kontrollera om meddelandet är inom tidsramen och från rätt domän
+                    if (start_timestamp <= msg_timestamp <= stop_timestamp and 
+                        domain in msg_url):
+                        timeframe_messages.append(msg)
+                except (ValueError, IndexError, AttributeError) as e:
+                    continue
+            
+            print(f"[AccessControl] Found {len(timeframe_messages)} messages in timeframe for domain {domain}")
+            
+            # Bearbeta meddelanden för att extrahera URLs och cookies
+            urls_data = []
+            session_cookies = set()
+            
+            for msg in timeframe_messages:
+                try:
+                    request_header = msg.get('requestHeader', '')
+                    response_header = msg.get('responseHeader', '')
+                    request_body = msg.get('requestBody', '')
+                    response_body = msg.get('responseBody', '')
+                    
+                    # Extrahera URL från request header
+                    url = self._extract_url_from_request_header(request_header)
+                    if not url or self._should_skip_url(url):
+                        continue
+                    
+                    # Extrahera HTTP-metod
+                    method = self._extract_method_from_request_header(request_header)
+                    
+                    # Extrahera status kod från response
+                    status_code = self._extract_status_code_from_response_header(response_header)
+                    
+                    # Extrahera cookies från request headers
+                    cookies_from_request = self._extract_cookies_from_request_header(request_header)
+                    if cookies_from_request:
+                        session_cookies.add(cookies_from_request)
+                    
+                    # Extrahera Set-Cookie från response headers för framtida användning
+                    set_cookies = self._extract_set_cookies_from_response_header(response_header)
+                    if set_cookies:
+                        session_cookies.add(set_cookies)
+                    
+                    # Lägg till URL data
+                    url_data = {
+                        'url': url,
+                        'method': method,
+                        'request_body': request_body,
+                        'status_code': status_code,
+                        'request_header': request_header,
+                        'response_header': response_header,
+                        'cookies_used': cookies_from_request,
+                        'category': self._categorize_url(url),
+                        'timestamp': msg.get('timestamp', 0)
+                    }
+                    urls_data.append(url_data)
+                    
+                except Exception as e:
+                    print(f"[AccessControl] Error processing message: {e}")
+                    continue
+            
+            # Ta bort dubbletter baserat på URL och metod
+            unique_urls = {}
+            for url_data in urls_data:
+                key = f"{url_data['method']}:{url_data['url']}"
+                if key not in unique_urls:
+                    unique_urls[key] = url_data
+            
+            final_urls = list(unique_urls.values())
+            
+            # Kombinera alla cookies till en sträng
+            combined_cookies = '; '.join(session_cookies) if session_cookies else ''
+            
+            # Spara session-data
+            session_filename = f"session_{session_label}_{int(stop_timestamp)}.json"
+            session_file_path = os.path.join(self.sessions_dir, session_filename)
+            
+            session_data = {
+                'session_label': session_label,
+                'target_url': target_url,
+                'timestamp': stop_timestamp,
+                'start_timestamp': start_timestamp,
+                'duration': stop_timestamp - start_timestamp,
+                'url_count': len(final_urls),
+                'urls': final_urls,
+                'cookies': combined_cookies,
+                'has_cookies': bool(combined_cookies.strip()),
+                'categories': self._get_url_categories(final_urls),
+                'collection_method': 'timeframe_recording'
+            }
+            
+            with open(session_file_path, 'w', encoding='utf-8') as f:
+                json.dump(session_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"[AccessControl] Saved session to {session_file_path}")
+            
+            return {
+                'success': True,
+                'filename': session_filename,
+                'session_label': session_label,
+                'url_count': len(final_urls),
+                'cookies_found': bool(combined_cookies.strip()),
+                'categories': session_data['categories'],
+                'duration': session_data['duration']
+            }
+            
+        except Exception as e:
+            print(f"[AccessControl] Error in collect_session_data_by_timeframe: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def test_access_control_with_separate_sessions(self, urls_session_file, credentials_session_file, test_description=''):
+        """Testa access control med URL:er från en session och credentials från en annan"""
+        try:
+            print(f"[AccessControl] Starting test with URLs from {urls_session_file} and credentials from {credentials_session_file}")
+            
+            # Ladda URL-session
+            urls_session_path = os.path.join(self.sessions_dir, urls_session_file)
+            if not os.path.exists(urls_session_path):
+                return {
+                    'success': False,
+                    'error': f'URL-session filen hittades inte: {urls_session_file}'
+                }
+            
+            with open(urls_session_path, 'r', encoding='utf-8') as f:
+                urls_session_data = json.load(f)
+            
+            # Ladda credentials-session
+            credentials_session_path = os.path.join(self.sessions_dir, credentials_session_file)
+            if not os.path.exists(credentials_session_path):
+                return {
+                    'success': False,
+                    'error': f'Credentials-session filen hittades inte: {credentials_session_file}'
+                }
+            
+            with open(credentials_session_path, 'r', encoding='utf-8') as f:
+                credentials_session_data = json.load(f)
+            
+            # Hämta data
+            urls_to_test = urls_session_data.get('urls', [])
+            test_cookies = credentials_session_data.get('cookies', '')
+            
+            if not urls_to_test:
+                return {
+                    'success': False,
+                    'error': 'Inga URL:er att testa från den valda sessionen'
+                }
+            
+            print(f"[AccessControl] Testing {len(urls_to_test)} URLs with cookies from {credentials_session_data.get('session_label', 'unknown')}")
+            
+            # Genomför access control tester
+            test_results = []
+            test_id = f"test_{int(time.time())}"
+            
+            for url_data in urls_to_test:
+                url = url_data.get('url', '')
+                original_method = url_data.get('method', 'GET')
+                original_cookies = url_data.get('cookies_used', '')
+                
+                if self._should_skip_url(url):
+                    continue
+                
+                # Testa URL med de nya credentials
+                test_result = self._perform_access_control_test(
+                    url=url,
+                    method=original_method,
+                    test_cookies=test_cookies,
+                    original_cookies=original_cookies,
+                    category=url_data.get('category', 'other')
+                )
+                
+                if test_result:
+                    test_results.append(test_result)
+            
+            # Analysera resultat
+            analysis = self._analyze_test_results(test_results)
+            
+            # Spara testresultat
+            test_report = {
+                'test_id': test_id,
+                'test_description': test_description,
+                'timestamp': time.time(),
+                'urls_session': urls_session_data.get('session_label', urls_session_file),
+                'credentials_session': credentials_session_data.get('session_label', credentials_session_file),
+                'urls_session_file': urls_session_file,
+                'credentials_session_file': credentials_session_file,
+                'total_tests': len(test_results),
+                'test_results': test_results,
+                'analysis': analysis,
+                'risk_level': self._determine_overall_risk(analysis),
+                'potential_issues': analysis.get('by_risk_level', {}).get('HIGH', 0) + analysis.get('by_risk_level', {}).get('CRITICAL', 0)
+            }
+            
+            # Spara rapport
+            report_filename = f"test_report_{test_id}.json"
+            report_path = os.path.join(self.tests_dir, report_filename)
+            
+            with open(report_path, 'w', encoding='utf-8') as f:
+                json.dump(test_report, f, indent=2, ensure_ascii=False)
+            
+            print(f"[AccessControl] Test completed. {len(test_results)} URLs tested, saved to {report_filename}")
+            
+            return {
+                'success': True,
+                'test_id': test_id,
+                'test_count': len(test_results),
+                'report_filename': report_filename,
+                'risk_level': test_report['risk_level'],
+                'potential_issues': test_report['potential_issues']
+            }
+            
+        except Exception as e:
+            print(f"[AccessControl] Error in test_access_control_with_separate_sessions: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def get_test_results(self):
+        """Hämta alla sparade testresultat"""
+        try:
+            results = []
+            
+            # Läs alla testrapporter från tests_dir
+            if os.path.exists(self.tests_dir):
+                for filename in os.listdir(self.tests_dir):
+                    if filename.startswith('test_report_') and filename.endswith('.json'):
+                        file_path = os.path.join(self.tests_dir, filename)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                test_data = json.load(f)
+                            
+                            # Skapa sammanfattning för visning
+                            summary = {
+                                'test_id': test_data.get('test_id', 'unknown'),
+                                'test_description': test_data.get('test_description', ''),
+                                'timestamp': test_data.get('timestamp', 0),
+                                'url_session': test_data.get('urls_session', 'unknown'),
+                                'credentials_session': test_data.get('credentials_session', 'unknown'),
+                                'total_tests': test_data.get('total_tests', 0),
+                                'risk_level': test_data.get('risk_level', 'UNKNOWN'),
+                                'potential_issues': test_data.get('potential_issues', 0),
+                                'issues': []
+                            }
+                            
+                            # Extrahera specifika problem för visning
+                            test_results = test_data.get('test_results', [])
+                            for result in test_results:
+                                if result.get('risk_level') in ['HIGH', 'CRITICAL']:
+                                    summary['issues'].append({
+                                        'url': result.get('url', ''),
+                                        'description': result.get('description', ''),
+                                        'severity': result.get('risk_level', 'UNKNOWN'),
+                                        'finding': result.get('finding', '')
+                                    })
+                            
+                            results.append(summary)
+                            
+                        except Exception as e:
+                            print(f"[AccessControl] Error reading test report {filename}: {e}")
+                            continue
+            
+            # Sortera efter timestamp (nyast först)
+            results.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+            
+            return results
+            
+        except Exception as e:
+            print(f"[AccessControl] Error getting test results: {e}")
+            return []
+
+    def _perform_access_control_test(self, url, method, test_cookies, original_cookies, category='other'):
+        """Genomför en enskild access control test"""
+        try:
+            # Gör HTTP-anrop med test-cookies
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            if test_cookies:
+                headers['Cookie'] = test_cookies
+            
+            # Genomför request
+            if method.upper() == 'POST':
+                response = requests.post(url, headers=headers, timeout=10, allow_redirects=False, verify=False)
+            else:
+                response = requests.get(url, headers=headers, timeout=10, allow_redirects=False, verify=False)
+            
+            # Analysera svar
+            status_code = response.status_code
+            response_length = len(response.content)
+            
+            # Avgör risk-nivå baserat på status kod och innehåll
+            risk_level, finding, description = self._analyze_access_control_response(
+                url, status_code, response_length, test_cookies, original_cookies, category
+            )
+            
+            return {
+                'url': url,
+                'method': method,
+                'test_cookies': test_cookies[:100] + '...' if len(test_cookies) > 100 else test_cookies,
+                'original_cookies': original_cookies[:100] + '...' if len(original_cookies) > 100 else original_cookies,
+                'status_code': status_code,
+                'response_length': response_length,
+                'risk_level': risk_level,
+                'finding': finding,
+                'description': description,
+                'category': category,
+                'timestamp': time.time()
+            }
+            
+        except requests.exceptions.RequestException as e:
+            return {
+                'url': url,
+                'method': method,
+                'test_cookies': test_cookies[:100] + '...' if len(test_cookies) > 100 else test_cookies,
+                'status_code': 0,
+                'response_length': 0,
+                'risk_level': 'ERROR',
+                'finding': 'REQUEST_FAILED',
+                'description': f'Request misslyckades: {str(e)}',
+                'category': category,
+                'timestamp': time.time()
+            }
+
+    def _analyze_access_control_response(self, url, status_code, response_length, test_cookies, original_cookies, category):
+        """Analysera access control response och avgör risk-nivå"""
+        
+        # Om samma cookies används, ingen access control-överträdelse
+        if test_cookies == original_cookies:
+            return 'LOW', 'SAME_CREDENTIALS', 'Samma credentials används - förväntat resultat'
+        
+        # Analysera baserat på status kod
+        if status_code == 200:
+            # Framgångsrik åtkomst kan vara problem beroende på kategori
+            if category == 'admin':
+                return 'CRITICAL', 'UNAUTHORIZED_ADMIN_ACCESS', f'Ej auktoriserad åtkomst till admin-funktion: {url}'
+            elif category == 'user_data':
+                return 'HIGH', 'UNAUTHORIZED_DATA_ACCESS', f'Ej auktoriserad åtkomst till användardata: {url}'
+            elif category == 'api':
+                return 'MEDIUM', 'UNAUTHORIZED_API_ACCESS', f'Ej auktoriserad åtkomst till API: {url}'
+            else:
+                return 'MEDIUM', 'UNAUTHORIZED_ACCESS', f'Ej auktoriserad åtkomst: {url}'
+        
+        elif status_code in [401, 403]:
+            # Korrekt beteende - åtkomst nekad
+            return 'LOW', 'ACCESS_DENIED', f'Åtkomst korrekt nekad (HTTP {status_code}): {url}'
+        
+        elif status_code in [302, 301]:
+            # Omdirigering - kan vara till login eller annan sida
+            return 'MEDIUM', 'REDIRECT_RESPONSE', f'Omdirigering (HTTP {status_code}) - kontrollera destination: {url}'
+        
+        elif status_code in [404, 405]:
+            # Inte hittat eller metod ej tillåten
+            return 'LOW', 'NOT_FOUND', f'Resurs inte hittad eller metod ej tillåten (HTTP {status_code}): {url}'
+        
+        elif status_code >= 500:
+            # Serverfel
+            return 'MEDIUM', 'SERVER_ERROR', f'Serverfel (HTTP {status_code}) - kan indikera problem: {url}'
+        
+        else:
+            # Andra status koder
+            return 'MEDIUM', 'UNEXPECTED_RESPONSE', f'Oväntat svar (HTTP {status_code}): {url}'
+
+    def _determine_overall_risk(self, analysis):
+        """Avgör övergripande risk-nivå för ett test"""
+        risk_counts = analysis.get('by_risk_level', {})
+        
+        if risk_counts.get('CRITICAL', 0) > 0:
+            return 'CRITICAL'
+        elif risk_counts.get('HIGH', 0) > 0:
+            return 'HIGH'
+        elif risk_counts.get('MEDIUM', 0) > 0:
+            return 'MEDIUM'
+        else:
+            return 'LOW'
+
+    # Hjälpmetoder för att extrahera data från HTTP headers
+
+    def _extract_url_from_request_header(self, request_header):
+        """Extrahera URL från request header"""
+        try:
+            lines = request_header.split('\n')
+            if lines:
+                first_line = lines[0].strip()
+                parts = first_line.split(' ')
+                if len(parts) >= 2:
+                    return parts[1]
+        except Exception:
+            pass
+        return None
+
+    def _extract_method_from_request_header(self, request_header):
+        """Extrahera HTTP-metod från request header"""
+        try:
+            lines = request_header.split('\n')
+            if lines:
+                first_line = lines[0].strip()
+                parts = first_line.split(' ')
+                if parts:
+                    return parts[0].upper()
+        except Exception:
+            pass
+        return 'GET'
+
+    def _extract_status_code_from_response_header(self, response_header):
+        """Extrahera status kod från response header"""
+        try:
+            lines = response_header.split('\n')
+            if lines:
+                first_line = lines[0].strip()
+                parts = first_line.split(' ')
+                if len(parts) >= 2:
+                    return int(parts[1])
+        except Exception:
+            pass
+        return 200
+
+    def _extract_cookies_from_request_header(self, request_header):
+        """Extrahera cookies från request header"""
+        try:
+            lines = request_header.split('\n')
+            for line in lines:
+                if line.lower().startswith('cookie:'):
+                    return line.split(':', 1)[1].strip()
+        except Exception:
+            pass
+        return ''
+
+    def _extract_set_cookies_from_response_header(self, response_header):
+        """Extrahera Set-Cookie från response header"""
+        try:
+            lines = response_header.split('\n')
+            cookies = []
+            for line in lines:
+                if line.lower().startswith('set-cookie:'):
+                    cookie_value = line.split(':', 1)[1].strip()
+                    # Ta bara cookie-namnet och värdet, inte attributes
+                    if '=' in cookie_value:
+                        cookie_part = cookie_value.split(';')[0]
+                        cookies.append(cookie_part)
+            return '; '.join(cookies) if cookies else ''
+        except Exception:
+            pass
+        return ''

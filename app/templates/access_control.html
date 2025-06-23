@@ -1,4 +1,3 @@
-<!-- Uppdaterad access_control.html - ersätt den befintliga -->
 {% extends "base.html" %}
 {% block title %}Access Control Testing{% endblock %}
 
@@ -7,226 +6,197 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header">
-                <h2>Access Control Testing</h2>
+                <h2>🔐 Access Control Testing</h2>
+                <p class="mb-0">Säker testning av åtkomstkontroller genom strukturerad session-hantering</p>
             </div>
             <div class="card-body">
-                {% if target_url %}
-                <div class="alert alert-info">
-                    <h5>Testa för dataläckage mellan användarnivåer</h5>
-                    <p><strong>Målwebbplats:</strong> <code>{{ target_url }}</code></p>
-                    <p>Detta verktyg hjälper dig att identifiera om olika användarnivåer kan komma åt varandras data eller funktionalitet.</p>
-                    <div class="mt-2">
-                        <strong>Så här fungerar det:</strong>
-                        <ol class="mt-2">
-                            <li>Nollställ ZAP för ren testmiljö</li>
-                            <li>Logga in som första användare (t.ex. admin) och samla URL:er</li>
-                            <li>Logga in som andra användare (t.ex. normal user) och samla URL:er</li>
-                            <li>Testa om normal user kan komma åt admin-URL:er med sina credentials</li>
-                        </ol>
-                    </div>
-                </div>
-                {% else %}
-                <div class="alert alert-warning">
-                    <h5>Ingen målwebbplats konfigurerad</h5>
-                    <p>Du behöver först konfigurera en målwebbplats för att kunna utföra access control testing.</p>
-                    <a href="{{ url_for('target') }}" class="btn btn-primary">Gå till målkonfiguration</a>
-                </div>
-                {% endif %}
                 
-                <!-- Steg 1: Reset ZAP -->
+                <!-- Steg 1: Förberedelse -->
                 <div class="card mb-4">
                     <div class="card-header bg-light">
-                        <h5>Steg 1: Förbered testning</h5>
+                        <h5>Steg 1: Förbered ZAP för ny testning</h5>
                     </div>
                     <div class="card-body">
-                        <p>Börja med att nollställa ZAP för att säkerställa ren testmiljö.</p>
-                        <button id="reset-zap-btn" class="btn btn-warning" {% if not target_url %}disabled{% endif %}>
-                            <i class="bi bi-arrow-clockwise"></i> Nollställ ZAP för Access Control Testing
+                        <p>Nollställ ZAP för att starta med ren data.</p>
+                        <button id="reset-zap-btn" class="btn btn-outline-danger" {% if not target_url %}disabled{% endif %}>
+                            <i class="bi bi-arrow-clockwise"></i> Nollställ ZAP
                         </button>
-                        {% if not target_url %}
-                        <div class="form-text text-muted">Konfigurera målwebbplats först för att aktivera denna funktion</div>
-                        {% endif %}
                         <div id="reset-status" class="mt-2"></div>
                     </div>
                 </div>
                 
-                <!-- Steg 2: Samla URLs -->
+                <!-- Steg 2: Session Management -->
                 <div class="card mb-4">
                     <div class="card-header bg-light">
-                        <h5>Steg 2: Samla URL:er från olika användarsessioner</h5>
+                        <h5>Steg 2: Hantera användarsessioner</h5>
                     </div>
                     <div class="card-body">
-                        <p>Logga in som olika användare och samla URL:er de har åtkomst till.</p>
-                        
                         <div class="row">
                             <div class="col-md-6">
-                                <label for="target-url" class="form-label">Target URL</label>
-                                <div class="input-group">
+                                <h6>🎬 Nuvarande session</h6>
+                                <div class="mb-3">
+                                    <label for="current-session-label" class="form-label">Sessionsetikett</label>
+                                    <input type="text" class="form-control" id="current-session-label" 
+                                           placeholder="t.ex. Admin, NormalUser, Guest">
+                                    <div class="form-text">Beskriv användarnivån du kommer att simulera</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="target-url" class="form-label">Target URL</label>
                                     <input type="url" class="form-control" id="target-url" 
-                                           value="{{ target_url or '' }}" 
-                                           {% if target_url %}{% else %}placeholder="https://example.com"{% endif %}>
-                                    {% if not target_url %}
-                                    <button class="btn btn-outline-secondary" type="button" id="set-target-btn">
-                                        <i class="bi bi-check"></i> Sätt
+                                           value="{{ target_url or '' }}" readonly>
+                                </div>
+                                
+                                <!-- Session Controls -->
+                                <div class="session-controls">
+                                    <button id="start-session-btn" class="btn btn-success" {% if not target_url %}disabled{% endif %}>
+                                        <i class="bi bi-play"></i> Starta session-inspelning
                                     </button>
-                                    {% endif %}
+                                    <button id="stop-session-btn" class="btn btn-danger" style="display: none;">
+                                        <i class="bi bi-stop"></i> Stoppa och spara session
+                                    </button>
                                 </div>
-                                <div class="form-text">
-                                    {% if target_url %}
-                                    Målwebbplats är konfigurerad från huvudinställningar
-                                    {% else %}
-                                    Ange URL till applikationen som ska testas
-                                    {% endif %}
+                                
+                                <div id="session-recording-status" class="mt-3"></div>
+                                
+                                <!-- Instruktioner för aktiv session -->
+                                <div id="recording-instructions" class="alert alert-info mt-3" style="display: none;">
+                                    <h6><i class="bi bi-record-circle text-danger"></i> Session pågår</h6>
+                                    <p class="mb-2"><strong>Nu ska du:</strong></p>
+                                    <ol class="mb-0">
+                                        <li>Öppna webbläsare med ZAP proxy</li>
+                                        <li>Gå till <code id="target-display">{{ target_url }}</code></li>
+                                        <li>Logga in som <strong><span id="role-display">den angivna användaren</span></strong></li>
+                                        <li>Utforska alla funktioner denna användare har tillgång till</li>
+                                        <li>Klicka "Stoppa och spara session" när du är klar</li>
+                                    </ol>
                                 </div>
                             </div>
+                            
                             <div class="col-md-6">
-                                <label for="session-label" class="form-label">Sessionsetikett</label>
-                                <input type="text" class="form-control" id="session-label" placeholder="admin">
-                                <div class="form-text">Beskrivande namn (t.ex. "admin", "user", "guest", "manager")</div>
-                            </div>
-                        </div>
-                        
-                        <div class="mt-3">
-                            <button id="collect-urls-btn" class="btn btn-primary" {% if not target_url %}disabled{% endif %}>
-                                <i class="bi bi-collection"></i> Samla URL:er från nuvarande ZAP-session
-                            </button>
-                            <div class="form-text mt-1">
-                                <strong>Instruktion:</strong> Innan du klickar, surfa runt på webbapplikationen via ZAP proxy med den användare du vill testa (t.ex. logga in som admin och besök admin-sidor).
-                            </div>
-                        </div>
-                        
-                        <div id="collection-status" class="mt-2"></div>
-                    </div>
-                </div>
-                
-                <!-- Steg 3: Visa insamlade sessioner -->
-                <div class="card mb-4">
-                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Steg 3: Insamlade sessioner</h5>
-                        <button id="refresh-sessions-btn" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-arrow-clockwise"></i> Uppdatera
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div id="sessions-list">
-                            <div class="text-center">
-                                <div class="spinner-border spinner-border-sm" role="status"></div>
-                                <span class="ms-2">Laddar sessioner...</span>
+                                <h6>📁 Sparade sessioner</h6>
+                                <div id="saved-sessions">
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                                        <span class="ms-2">Laddar sessioner...</span>
+                                    </div>
+                                </div>
+                                <button id="refresh-sessions-btn" class="btn btn-sm btn-outline-primary mt-2">
+                                    <i class="bi bi-arrow-clockwise"></i> Uppdatera lista
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Steg 4: Testa Access Control -->
+                <!-- Steg 3: Konfiguration av Access Control Test -->
                 <div class="card mb-4">
                     <div class="card-header bg-light">
-                        <h5>Steg 4: Testa Access Control</h5>
+                        <h5>Steg 3: Konfigurera Access Control Test</h5>
                     </div>
                     <div class="card-body">
-                        <p>Välj en session med URL:er att testa och ange credentials för användaren som ska försöka komma åt dessa URL:er.</p>
-                        
-                        {% if target_url %}
-                        <div class="alert alert-info">
-                            <small><strong>Tips:</strong> Testa om en "normal user" kan komma åt "admin"-URL:er genom att välja admin-sessionen som källa och extrahera cookies från en inloggad normal user.</small>
-                        </div>
-                        {% endif %}
-                        
                         <div class="row">
-                            <div class="col-md-4">
-                                <label for="source-session-select" class="form-label">Käll-session (URL:er att testa)</label>
-                                <select class="form-select" id="source-session-select" {% if not target_url %}disabled{% endif %}>
-                                    <option value="">Välj session...</option>
+                            <div class="col-md-6">
+                                <label for="urls-from-session" class="form-label">URL:er att testa från session:</label>
+                                <select class="form-select" id="urls-from-session">
+                                    <option value="">Välj session med URL:er...</option>
                                 </select>
-                                <div class="form-text">Välj session med URL:er som ska testas</div>
+                                <div class="form-text">Välj vilken sessions URL:er som ska testas</div>
                             </div>
-                            <div class="col-md-4">
-                                <label for="test-cookies" class="form-label">Test-cookies</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="test-cookies" 
-                                           placeholder="sessionid=abc123; csrftoken=def456" 
-                                           {% if not target_url %}disabled{% endif %}>
-                                    <button class="btn btn-outline-secondary" type="button" id="extract-cookies-btn" 
-                                            {% if not target_url %}disabled{% endif %}>
-                                        <i class="bi bi-download"></i> Extrahera från ZAP
-                                    </button>
-                                </div>
-                                <div class="form-text">Cookies för användaren som ska testa åtkomst</div>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="test-label" class="form-label">Test-etikett</label>
-                                <input type="text" class="form-control" id="test-label" 
-                                       placeholder="normal_user" {% if not target_url %}disabled{% endif %}>
-                                <div class="form-text">Beskrivande namn för testanvändaren</div>
+                            
+                            <div class="col-md-6">
+                                <label for="credentials-from-session" class="form-label">Testa med credentials från session:</label>
+                                <select class="form-select" id="credentials-from-session">
+                                    <option value="">Välj session med credentials...</option>
+                                </select>
+                                <div class="form-text">Välj vilken sessions inloggning som ska användas för testning</div>
                             </div>
                         </div>
                         
                         <div class="mt-3">
-                            <button id="start-test-btn" class="btn btn-danger" {% if not target_url %}disabled{% endif %}>
-                                <i class="bi bi-shield-exclamation"></i> Starta Access Control Test
-                            </button>
-                            <div class="form-text mt-1">
-                                <strong>Varning:</strong> Detta kommer att testa alla URL:er från käll-sessionen med test-användarens credentials.
-                            </div>
+                            <label for="test-description" class="form-label">Testbeskrivning (valfritt)</label>
+                            <input type="text" class="form-control" id="test-description" 
+                                   placeholder="t.ex. 'Testa om NormalUser kan komma åt Admin-funktioner'">
                         </div>
                         
+                        <!-- Testexempel -->
+                        <div class="alert alert-light mt-3">
+                            <h6>💡 Exempel på testscenarier:</h6>
+                            <ul class="mb-0">
+                                <li><strong>Vertikal escalering:</strong> URL:er från "Admin" → Credentials från "NormalUser"</li>
+                                <li><strong>Horisontell escalering:</strong> URL:er från "User1" → Credentials från "User2"</li>
+                                <li><strong>Ej autentiserad åtkomst:</strong> URL:er från "Admin" → Credentials från "Guest" (tom)</li>
+                            </ul>
+                        </div>
+                        
+                        <button id="start-access-test-btn" class="btn btn-primary mt-3" disabled>
+                            <i class="bi bi-shield-check"></i> Starta Access Control Test
+                        </button>
                         <div id="test-status" class="mt-2"></div>
                     </div>
                 </div>
                 
-                <!-- Steg 5: Resultat -->
+                <!-- Steg 4: Testresultat -->
                 <div class="card mb-4">
                     <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Testresultat</h5>
+                        <h5 class="mb-0">Steg 4: Testresultat</h5>
                         <button id="refresh-results-btn" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-arrow-clockwise"></i> Uppdatera
                         </button>
                     </div>
                     <div class="card-body">
                         <div id="test-results">
-                            <div class="alert alert-info">
-                                <div class="d-flex align-items-center">
-                                    <i class="bi bi-info-circle me-2"></i>
-                                    <span>Inga testresultat ännu. Kör ett access control test för att se resultat här.</span>
-                                </div>
+                            <div class="text-center text-muted">
+                                <i class="bi bi-clipboard-data"></i>
+                                <p>Kör ett access control test för att se resultat här.</p>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Hjälp-sektion - endast visa om target_url finns -->
-                {% if target_url %}
+                <!-- Workflow Guide -->
                 <div class="card mb-4">
                     <div class="card-header bg-light">
-                        <h5>Workflow för {{ target_url }}</h5>
+                        <h5>📋 Rekommenderat Workflow</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-6">
-                                <h6>👑 Admin Session</h6>
+                            <div class="col-md-4">
+                                <h6>1️⃣ Admin Session</h6>
                                 <ol>
-                                    <li>Öppna webbläsare med ZAP proxy</li>
-                                    <li>Gå till <code>{{ target_url }}</code></li>
-                                    <li>Logga in som <strong>administrator</strong></li>
-                                    <li>Surfa på admin-funktioner (dashboards, inställningar, användarhantering)</li>
-                                    <li>Skriv "Admin" i sessionsetikett</li>
-                                    <li>Klicka "Samla URL:er"</li>
+                                    <li>Skriv "Admin" som sessionsetikett</li>
+                                    <li>Klicka "Starta session-inspelning"</li>
+                                    <li>Logga in som admin i webbläsaren</li>
+                                    <li>Utforska admin-funktioner</li>
+                                    <li>Klicka "Stoppa och spara session"</li>
                                 </ol>
                             </div>
-                            <div class="col-md-6">
-                                <h6>👤 Normal User Session</h6>
+                            
+                            <div class="col-md-4">
+                                <h6>2️⃣ User Session</h6>
                                 <ol>
-                                    <li>Logga ut från admin</li>
-                                    <li>Logga in som <strong>vanlig användare</strong></li>
-                                    <li>Surfa på normala funktioner (profil, användarfunktioner)</li>
-                                    <li>Skriv "NormalUser" i sessionsetikett</li>
-                                    <li>Klicka "Samla URL:er"</li>
-                                    <li><strong>Testa:</strong> Välj "Admin" som källa, extrahera cookies från normal user</li>
+                                    <li>Skriv "NormalUser" som sessionsetikett</li>
+                                    <li>Klicka "Starta session-inspelning"</li>
+                                    <li>Logga in som vanlig användare</li>
+                                    <li>Utforska användarfunktioner</li>
+                                    <li>Klicka "Stoppa och spara session"</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <h6>3️⃣ Testa Åtkomst</h6>
+                                <ol>
+                                    <li>Välj "Admin" för URL:er att testa</li>
+                                    <li>Välj "NormalUser" för credentials</li>
+                                    <li>Skriv beskrivning av testet</li>
+                                    <li>Klicka "Starta Access Control Test"</li>
+                                    <li>Granska resultaten</li>
                                 </ol>
                             </div>
                         </div>
                     </div>
                 </div>
-                {% endif %}
+                
             </div>
         </div>
     </div>
@@ -235,52 +205,4 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/access_control.js') }}"></script>
-<script>
-// Lägg till funktion för att sätta target URL manuellt
-document.addEventListener('DOMContentLoaded', function() {
-    const setTargetBtn = document.getElementById('set-target-btn');
-    const targetUrlInput = document.getElementById('target-url');
-    
-    if (setTargetBtn) {
-        setTargetBtn.addEventListener('click', function() {
-            const targetUrl = targetUrlInput.value.trim();
-            
-            if (!targetUrl) {
-                alert('Ange en target URL först');
-                return;
-            }
-            
-            setTargetBtn.disabled = true;
-            setTargetBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sätter...';
-            
-            fetch('/api/access-control/set-target', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({
-                    target_url: targetUrl
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(`Target URL satt till: ${data.target_url}`);
-                    location.reload(); // Ladda om sidan för att aktivera funktioner
-                } else {
-                    alert(`Fel: ${data.error}`);
-                }
-            })
-            .catch(error => {
-                alert(`Fel: ${error.message}`);
-            })
-            .finally(() => {
-                setTargetBtn.disabled = false;
-                setTargetBtn.innerHTML = '<i class="bi bi-check"></i> Sätt';
-            });
-        });
-    }
-});
-</script>
 {% endblock %}
