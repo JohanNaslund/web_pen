@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Control Test Report</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.0/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .dashboard-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 20px auto;
+            padding: 30px;
+            max-width: 1400px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: none;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        }
+        
+        .metric-card.critical {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+        
+        .metric-card.high {
+            background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
+        }
+        
+        .metric-card.medium {
+            background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%);
+        }
+        
+        .metric-card.low {
+            background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            height: 400px;
+            position: relative;
+        }
+        
+        .chart-container canvas {
+            max-height: 300px !important;
+        }
+        
+        .chart-container.small {
+            height: 350px;
+        }
+        
+        .chart-container.large {
+            height: 450px;
+        }
+        
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .test-details {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .details-table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .btn-load-report {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-load-report:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            color: white;
+        }
+        
+        .file-input-container {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        
+        .file-input-container input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .animate-slide-in {
+            animation: slideIn 0.6s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .no-data-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .no-data-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        /* Prevent excessive spacing */
+        .row {
+            margin-bottom: 0;
+        }
+        
+        .container-fluid {
+            padding: 10px;
+        }
+        
+        /* Limit table height */
+        .table-responsive {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="dashboard-container">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <h1 class="display-4 fw-bold text-primary">
+                    <i class="bi bi-shield-check"></i>
+                    Access Control Test Report
+                </h1>
+                <p class="lead text-muted">Grafisk analys av säkerhetstester</p>
+            </div>
+            
+            <!-- File Upload -->
+            <div class="row mb-4">
+                <div class="col-12 text-center">
+                    <div class="file-input-container">
+                        <input type="file" id="reportFile" accept=".json" onchange="loadReport(event)">
+                        <label for="reportFile" class="btn btn-load-report">
+                            <i class="bi bi-upload"></i>
+                            Ladda Test Report JSON
+                        </label>
+                    </div>
+                    <p class="text-muted mt-2">Välj en JSON-fil från dina Access Control tester</p>
+                </div>
+            </div>
+            
+            <!-- No Data State -->
+            <div id="noDataState" class="no-data-state">
+                <i class="bi bi-file-earmark-text"></i>
+                <h3>Ingen rapport laddad</h3>
+                <p>Ladda upp en Access Control test report JSON-fil för att se grafisk analys</p>
+            </div>
+            
+            <!-- Report Content (Initially Hidden) -->
+            <div id="reportContent" style="display: none;">
+                
+                <!-- Test Overview -->
+                <div id="testOverview" class="test-details animate-slide-in">
+                    <h3><i class="bi bi-info-circle"></i> Test Översikt</h3>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Test ID:</strong> <span id="testId"></span></p>
+                            <p><strong>Beskrivning:</strong> <span id="testDescription"></span></p>
+                            <p><strong>Datum:</strong> <span id="testDate"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>URL Session:</strong> <span id="urlSession"></span></p>
+                            <p><strong>Credentials Session:</strong> <span id="credentialsSession"></span></p>
+                            <p><strong>Totalt testade URLs:</strong> <span id="totalTests"></span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Metrics Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3 mb-3">
+                        <div class="card metric-card critical">
+                            <h3 id="criticalCount">0</h3>
+                            <p>CRITICAL</p>
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card metric-card high">
+                            <h3 id="highCount">0</h3>
+                            <p>HIGH</p>
+                            <i class="bi bi-exclamation-circle-fill"></i>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card metric-card medium">
+                            <h3 id="mediumCount">0</h3>
+                            <p>MEDIUM</p>
+                            <i class="bi bi-info-circle-fill"></i>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card metric-card low">
+                            <h3 id="lowCount">0</h3>
+                            <p>LOW</p>
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Charts Row -->
+                <div class="row">
+                    <!-- Risk Level Distribution -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="chart-container small">
+                            <h4 class="chart-title">Risknivå Distribution</h4>
+                            <canvas id="riskChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Category Distribution -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="chart-container small">
+                            <h4 class="chart-title">URL Kategorier</h4>
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Findings Chart -->
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <div class="chart-container large">
+                            <h4 class="chart-title">Säkerhetsbrister per Typ</h4>
+                            <canvas id="findingsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Detailed Results Table -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="chart-container" style="height: auto; max-height: 600px; overflow-y: auto;">
+                            <h4 class="chart-title">Detaljerade Testresultat</h4>
+                            <div class="table-responsive">
+                                <table class="table table-striped details-table table-sm">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>URL</th>
+                                            <th>Risknivå</th>
+                                            <th>Resultat</th>
+                                            <th>Kategori</th>
+                                            <th>Status Code</th>
+                                            <th>Beskrivning</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="resultsTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chartInstances = {};
+
+        function loadReport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const reportData = JSON.parse(e.target.result);
+                    displayReport(reportData);
+                } catch (error) {
+                    alert('Fel vid läsning av JSON-fil: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function displayReport(data) {
+            // Hide no data state and show report content
+            document.getElementById('noDataState').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'block';
+
+            // Fill test overview
+            document.getElementById('testId').textContent = data.test_id || 'N/A';
+            document.getElementById('testDescription').textContent = data.test_description || 'N/A';
+            document.getElementById('testDate').textContent = formatDate(data.timestamp);
+            document.getElementById('urlSession').textContent = data.urls_session || 'N/A';
+            document.getElementById('credentialsSession').textContent = data.credentials_session || 'N/A';
+            document.getElementById('totalTests').textContent = data.total_tests || 0;
+
+            // Update metric cards
+            const riskLevels = data.analysis?.by_risk_level || {};
+            document.getElementById('criticalCount').textContent = riskLevels.CRITICAL || 0;
+            document.getElementById('highCount').textContent = riskLevels.HIGH || 0;
+            document.getElementById('mediumCount').textContent = riskLevels.MEDIUM || 0;
+            document.getElementById('lowCount').textContent = riskLevels.LOW || 0;
+
+            // Create charts
+            createRiskChart(riskLevels);
+            createCategoryChart(data.analysis?.by_category || {});
+            createFindingsChart(data.analysis?.by_finding || {});
+            
+            // Fill results table
+            fillResultsTable(data.test_results || []);
+        }
+
+        function createRiskChart(riskData) {
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            
+            if (chartInstances.riskChart) {
+                chartInstances.riskChart.destroy();
+            }
+
+            chartInstances.riskChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
+                    datasets: [{
+                        data: [
+                            riskData.CRITICAL || 0,
+                            riskData.HIGH || 0,
+                            riskData.MEDIUM || 0,
+                            riskData.LOW || 0
+                        ],
+                        backgroundColor: [
+                            '#ff6b6b',
+                            '#ffa726',
+                            '#42a5f5',
+                            '#66bb6a'
+                        ],
+                        borderWidth: 3,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 1.2,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createCategoryChart(categoryData) {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            
+            if (chartInstances.categoryChart) {
+                chartInstances.categoryChart.destroy();
+            }
+
+            const labels = Object.keys(categoryData);
+            const data = Object.values(categoryData);
+            
+            chartInstances.categoryChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            '#e91e63',
+                            '#9c27b0',
+                            '#673ab7',
+                            '#3f51b5',
+                            '#2196f3',
+                            '#00bcd4',
+                            '#009688',
+                            '#4caf50'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 1.2,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 10,
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createFindingsChart(findingsData) {
+            const ctx = document.getElementById('findingsChart').getContext('2d');
+            
+            if (chartInstances.findingsChart) {
+                chartInstances.findingsChart.destroy();
+            }
+
+            const labels = Object.keys(findingsData);
+            const data = Object.values(findingsData);
+
+            chartInstances.findingsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Antal förekomster',
+                        data: data,
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.5,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function fillResultsTable(results) {
+            const tbody = document.getElementById('resultsTableBody');
+            tbody.innerHTML = '';
+
+            results.forEach(result => {
+                const row = document.createElement('tr');
+                
+                // Risk level badge
+                const riskBadge = getRiskBadge(result.risk_level);
+                
+                row.innerHTML = `
+                    <td><small>${truncateUrl(result.url || 'N/A')}</small></td>
+                    <td>${riskBadge}</td>
+                    <td><small>${result.finding || 'N/A'}</small></td>
+                    <td><span class="badge bg-secondary">${result.category || 'N/A'}</span></td>
+                    <td><span class="badge bg-info">${result.status_code || 'N/A'}</span></td>
+                    <td><small>${result.description || 'N/A'}</small></td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function getRiskBadge(riskLevel) {
+            const badges = {
+                'CRITICAL': '<span class="badge bg-danger">CRITICAL</span>',
+                'HIGH': '<span class="badge bg-warning">HIGH</span>',
+                'MEDIUM': '<span class="badge bg-primary">MEDIUM</span>',
+                'LOW': '<span class="badge bg-success">LOW</span>'
+            };
+            return badges[riskLevel] || '<span class="badge bg-secondary">UNKNOWN</span>';
+        }
+
+        function truncateUrl(url, maxLength = 50) {
+            if (url.length <= maxLength) return url;
+            return url.substring(0, maxLength) + '...';
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return 'N/A';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString('sv-SE');
+        }
+    </script>
+</body>
+</html>

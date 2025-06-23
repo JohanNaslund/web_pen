@@ -3175,7 +3175,9 @@ def api_access_control_cleanup_recordings():
         }), 500
 
 
-
+@app.route('/access-control-report')
+def access_control_report():
+    return render_template('access_control_report.html')
 
 if __name__ == '__main__':
     test_zap_functionality()
