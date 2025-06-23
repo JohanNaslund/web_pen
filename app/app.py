@@ -3175,6 +3175,8 @@ def api_access_control_cleanup_recordings():
         }), 500
 
 
+# I app.py - Kontrollera att denna route finns och använder rätt template:
+
 @app.route('/access-control-report')
 def access_control_report():
     """Access Control rapportvy som visar tillgängliga testresultat från data/tests"""
@@ -3209,19 +3211,20 @@ def access_control_report():
             else:
                 flash("Ogiltig filnamn", "error")
         
-        return render_template('access_control_report.html',
+        return render_template('access_control_report.html',  # <-- SE TILL ATT DET ÄR RÄTT FILNAMN
                              test_results=test_results,
                              selected_test_file=selected_test_file,
                              selected_test_data=selected_test_data,
                              datetime=datetime)  # Skicka datetime till templaten
-                             
+        
     except Exception as e:
-        flash(f"Fel vid hämtning av testresultat: {str(e)}", "error")
-        return render_template('access_control_report.html',
-                             test_results=[],
-                             selected_test_file=None,
-                             selected_test_data=None,
-                             datetime=datetime)
+        flash(f"Ett fel uppstod: {str(e)}", "error")
+        return render_template('access_control_report.html',  # <-- SE TILL ATT DET ÄR RÄTT FILNAMN
+                        test_results=test_results,
+                        selected_test_file=selected_test_file,
+                        selected_test_data=selected_test_data,
+                        datetime=datetime)  # Skicka datetime till templaten
+        return redirect(url_for('access_control'))
     
 if __name__ == '__main__':
     test_zap_functionality()

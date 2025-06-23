@@ -467,37 +467,64 @@ class AccessControlManager:
     
     
     def _analyze_test_results(self, test_results):
-        """Analysera alla testresultat"""
+        """Förenklad analys - fokuserar på access control-brott"""
         analysis = {
             'total_tested': len(test_results),
-            'by_risk_level': {},
+            'unauthorized_access_count': 0,
+            'access_denied_count': 0,
+            'redirect_count': 0,
+            'other_count': 0,
             'by_finding': {},
-            'by_category': {},
+            'unauthorized_urls': [],  # Lista över URLs med unauthorized access
             'summary': ''
         }
         
         for result in test_results:
-            risk = result.get('risk_level', 'UNKNOWN')
             finding = result.get('finding', 'UNKNOWN')
-            category = result.get('category', 'other')
-            
-            analysis['by_risk_level'][risk] = analysis['by_risk_level'].get(risk, 0) + 1
             analysis['by_finding'][finding] = analysis['by_finding'].get(finding, 0) + 1
-            analysis['by_category'][category] = analysis['by_category'].get(category, 0) + 1
+            
+            # Räkna olika typer av resultat
+            if finding == 'UNAUTHORIZED_ACCESS':
+                analysis['unauthorized_access_count'] += 1
+                analysis['unauthorized_urls'].append({
+                    'url': result.get('url'),
+                    'method': result.get('method'),
+                    'status_code': result.get('status_code'),
+                    'description': result.get('description')
+                })
+            elif finding == 'ACCESS_DENIED':
+                analysis['access_denied_count'] += 1
+            elif finding == 'REDIRECT_RESPONSE':
+                analysis['redirect_count'] += 1
+            else:
+                analysis['other_count'] += 1
         
-        # Skapa sammanfattning
-        critical_count = analysis['by_risk_level'].get('CRITICAL', 0)
-        high_count = analysis['by_risk_level'].get('HIGH', 0)
+        # Skapa sammanfattning baserat på unauthorized access
+        unauthorized_count = analysis['unauthorized_access_count']
         
-        if critical_count > 0:
-            analysis['summary'] = f"KRITISK: {critical_count} allvarliga access control-brott upptäckta!"
-        elif high_count > 0:
-            analysis['summary'] = f"VARNING: {high_count} högrisk access control-problem upptäckta"
+        if unauthorized_count > 0:
+            analysis['summary'] = f"⚠️  {unauthorized_count} obehöriga åtkomster upptäckta! Kräver manuell bedömning."
+            analysis['risk_level'] = 'REQUIRES_REVIEW'
+        elif analysis['redirect_count'] > 0:
+            analysis['summary'] = f"ℹ️  {analysis['redirect_count']} omdirigeringar upptäckta. Kontrollera destinations."
+            analysis['risk_level'] = 'MANUAL_REVIEW'
         else:
-            analysis['summary'] = "Inga kritiska access control-problem upptäckta"
+            analysis['summary'] = "✅ Inga obehöriga åtkomster upptäckta. Access control fungerar korrekt."
+            analysis['risk_level'] = 'OK'
         
         return analysis
-    
+
+    def _determine_overall_result(self, analysis):
+        """Avgör övergripande testresultat"""
+        unauthorized_count = analysis.get('unauthorized_access_count', 0)
+        
+        if unauthorized_count > 0:
+            return 'REQUIRES_REVIEW'  # Kräver manuell bedömning
+        elif analysis.get('redirect_count', 0) > 0:
+            return 'MANUAL_REVIEW'    # Kontrollera omdirigeringar
+        else:
+            return 'PASSED'           # Access control fungerar
+
     def _extract_status_code(self, response_header):
         """Extrahera statuskod från response header"""
         try:
@@ -1052,20 +1079,22 @@ class AccessControlManager:
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 test_data = json.load(f)
                             
-                            # Skapa sammanfattning för visning
+                            # Skapa sammanfattning för visning - INKLUDERA ANALYSIS!
                             summary = {
                                 'test_id': test_data.get('test_id', 'unknown'),
                                 'test_description': test_data.get('test_description', ''),
                                 'timestamp': test_data.get('timestamp', 0),
-                                'url_session': test_data.get('urls_session', 'unknown'),
+                                'urls_session': test_data.get('urls_session', 'unknown'),  # Ändrat från url_session
                                 'credentials_session': test_data.get('credentials_session', 'unknown'),
                                 'total_tests': test_data.get('total_tests', 0),
                                 'risk_level': test_data.get('risk_level', 'UNKNOWN'),
                                 'potential_issues': test_data.get('potential_issues', 0),
+                                'analysis': test_data.get('analysis', {}),  # LÄGG TILL DENNA RAD!
+                                'filename': filename,  # Lägg till filename också
                                 'issues': []
                             }
                             
-                            # Extrahera specifika problem för visning
+                            # Extrahera specifika problem för visning (om det behövs)
                             test_results = test_data.get('test_results', [])
                             for result in test_results:
                                 if result.get('risk_level') in ['HIGH', 'CRITICAL']:
@@ -1102,7 +1131,7 @@ class AccessControlManager:
             if test_cookies:
                 headers['Cookie'] = test_cookies
             
-            # Genomför request
+            # Genomför request (allow_redirects=False för att fånga 302)
             if method.upper() == 'POST':
                 response = requests.post(url, headers=headers, timeout=10, allow_redirects=False, verify=False)
             else:
@@ -1112,9 +1141,15 @@ class AccessControlManager:
             status_code = response.status_code
             response_length = len(response.content)
             
+            # Extrahera redirect-destination för 302/301 svar
+            redirect_location = None
+            if status_code in [301, 302, 303, 307, 308]:
+                redirect_location = response.headers.get('Location', '')
+                print(f"[AccessControl] {status_code} redirect from {url} to {redirect_location}")
+            
             # Avgör risk-nivå baserat på status kod och innehåll
             risk_level, finding, description = self._analyze_access_control_response(
-                url, status_code, response_length, test_cookies, original_cookies, category
+                url, status_code, response_length, test_cookies, original_cookies, category, redirect_location
             )
             
             return {
@@ -1124,6 +1159,7 @@ class AccessControlManager:
                 'original_cookies': original_cookies[:100] + '...' if len(original_cookies) > 100 else original_cookies,
                 'status_code': status_code,
                 'response_length': response_length,
+                'redirect_location': redirect_location,  # Ny field!
                 'risk_level': risk_level,
                 'finding': finding,
                 'description': description,
@@ -1138,6 +1174,7 @@ class AccessControlManager:
                 'test_cookies': test_cookies[:100] + '...' if len(test_cookies) > 100 else test_cookies,
                 'status_code': 0,
                 'response_length': 0,
+                'redirect_location': None,
                 'risk_level': 'ERROR',
                 'finding': 'REQUEST_FAILED',
                 'description': f'Request misslyckades: {str(e)}',
@@ -1145,57 +1182,61 @@ class AccessControlManager:
                 'timestamp': time.time()
             }
 
-    def _analyze_access_control_response(self, url, status_code, response_length, test_cookies, original_cookies, category):
-        """Analysera access control response och avgör risk-nivå"""
+
+    def _analyze_access_control_response(self, url, status_code, response_length, test_cookies, original_cookies, category=None, redirect_location=None):
+        """Förenklad access control-analys - fokuserar på unauthorized access"""
         
         # Om samma cookies används, ingen access control-överträdelse
         if test_cookies == original_cookies:
-            return 'LOW', 'SAME_CREDENTIALS', 'Samma credentials används - förväntat resultat'
+            return 'INFO', 'SAME_CREDENTIALS', 'Samma credentials används - förväntat resultat'
         
         # Analysera baserat på status kod
-        if status_code == 200:
-            # Framgångsrik åtkomst kan vara problem beroende på kategori
-            if category == 'admin':
-                return 'CRITICAL', 'UNAUTHORIZED_ADMIN_ACCESS', f'Ej auktoriserad åtkomst till admin-funktion: {url}'
-            elif category == 'user_data':
-                return 'HIGH', 'UNAUTHORIZED_DATA_ACCESS', f'Ej auktoriserad åtkomst till användardata: {url}'
-            elif category == 'api':
-                return 'MEDIUM', 'UNAUTHORIZED_API_ACCESS', f'Ej auktoriserad åtkomst till API: {url}'
-            else:
-                return 'MEDIUM', 'UNAUTHORIZED_ACCESS', f'Ej auktoriserad åtkomst: {url}'
-        
+        if status_code in [200, 201, 202, 204]:
+            # Framgångsrik åtkomst = potentiellt problem
+            return 'UNAUTHORIZED_ACCESS', 'UNAUTHORIZED_ACCESS', f'Obehörig åtkomst upptäckt: {url}'
+            
         elif status_code in [401, 403]:
             # Korrekt beteende - åtkomst nekad
-            return 'LOW', 'ACCESS_DENIED', f'Åtkomst korrekt nekad (HTTP {status_code}): {url}'
+            return 'ACCESS_DENIED', 'ACCESS_DENIED', f'Åtkomst korrekt nekad (HTTP {status_code}): {url}'
         
         elif status_code in [302, 301]:
-            # Omdirigering - kan vara till login eller annan sida
-            return 'MEDIUM', 'REDIRECT_RESPONSE', f'Omdirigering (HTTP {status_code}) - kontrollera destination: {url}'
+            # Omdirigering - inkludera destination om tillgänglig
+            description = f'Omdirigering (HTTP {status_code}): {url}'
+            if redirect_location:
+                description += f' → {redirect_location}'
+                
+                # Analysera om redirecten är till login (bra) eller annan sida (behöver kontroll)
+                if any(keyword in redirect_location.lower() for keyword in ['login', 'signin', 'auth']):
+                    description += ' (troligen till login - bra säkerhet)'
+                else:
+                    description += ' (kontrollera destination)'
+            else:
+                description += ' (kontrollera destination)'
+                
+            return 'REDIRECT', 'REDIRECT_RESPONSE', description
         
         elif status_code in [404, 405]:
             # Inte hittat eller metod ej tillåten
-            return 'LOW', 'NOT_FOUND', f'Resurs inte hittad eller metod ej tillåten (HTTP {status_code}): {url}'
+            return 'NOT_FOUND', 'NOT_FOUND', f'Resurs inte hittad eller metod ej tillåten (HTTP {status_code}): {url}'
         
         elif status_code >= 500:
             # Serverfel
-            return 'MEDIUM', 'SERVER_ERROR', f'Serverfel (HTTP {status_code}) - kan indikera problem: {url}'
+            return 'SERVER_ERROR', 'SERVER_ERROR', f'Serverfel (HTTP {status_code}): {url}'
         
         else:
             # Andra status koder
-            return 'MEDIUM', 'UNEXPECTED_RESPONSE', f'Oväntat svar (HTTP {status_code}): {url}'
+            return 'UNEXPECTED', 'UNEXPECTED_RESPONSE', f'Oväntat svar (HTTP {status_code}): {url}'
 
     def _determine_overall_risk(self, analysis):
-        """Avgör övergripande risk-nivå för ett test"""
-        risk_counts = analysis.get('by_risk_level', {})
+        """Avgör övergripande testresultat"""
+        unauthorized_count = analysis.get('unauthorized_access_count', 0)
         
-        if risk_counts.get('CRITICAL', 0) > 0:
-            return 'CRITICAL'
-        elif risk_counts.get('HIGH', 0) > 0:
-            return 'HIGH'
-        elif risk_counts.get('MEDIUM', 0) > 0:
-            return 'MEDIUM'
+        if unauthorized_count > 0:
+            return 'REQUIRES_REVIEW'  # Kräver manuell bedömning
+        elif analysis.get('redirect_count', 0) > 0:
+            return 'MANUAL_REVIEW'    # Kontrollera omdirigeringar
         else:
-            return 'LOW'
+            return 'PASSED'           # Access control fungerar
 
     # Hjälpmetoder för att extrahera data från HTTP headers
 
