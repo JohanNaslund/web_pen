@@ -3177,8 +3177,52 @@ def api_access_control_cleanup_recordings():
 
 @app.route('/access-control-report')
 def access_control_report():
-    return render_template('access_control_report.html')
-
+    """Access Control rapportvy som visar tillgängliga testresultat från data/tests"""
+    try:
+        # Hämta alla tillgängliga testresultat från access_control_manager
+        test_results = access_control_manager.get_test_results()
+        
+        # Lägg till filename-attribut för varje testresultat för att göra det lättare i templaten
+        for test_result in test_results:
+            # Skapa filnamn baserat på test_id om det inte finns
+            if not hasattr(test_result, 'filename'):
+                test_result['filename'] = f"test_report_{test_result.get('test_id', 'unknown')}.json"
+        
+        # Kontrollera om det finns några test
+        if not test_results:
+            flash("Inga access control tester hittades. Kör först ett test från Access Control sidan.", "info")
+        
+        # Hämta vald testfil från query parametrar
+        selected_test_file = request.args.get('test_file')
+        selected_test_data = None
+        
+        if selected_test_file:
+            # Validera filnamn för säkerhet
+            if selected_test_file.endswith('.json') and '..' not in selected_test_file:
+                try:
+                    filepath = os.path.join(access_control_manager.tests_dir, selected_test_file)
+                    if os.path.exists(filepath):
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            selected_test_data = json.load(f)
+                except Exception as e:
+                    flash(f"Kunde inte läsa testfil: {str(e)}", "error")
+            else:
+                flash("Ogiltig filnamn", "error")
+        
+        return render_template('access_control_report.html',
+                             test_results=test_results,
+                             selected_test_file=selected_test_file,
+                             selected_test_data=selected_test_data,
+                             datetime=datetime)  # Skicka datetime till templaten
+                             
+    except Exception as e:
+        flash(f"Fel vid hämtning av testresultat: {str(e)}", "error")
+        return render_template('access_control_report.html',
+                             test_results=[],
+                             selected_test_file=None,
+                             selected_test_data=None,
+                             datetime=datetime)
+    
 if __name__ == '__main__':
     test_zap_functionality()
     app.run(host='0.0.0.0', port=5001, debug=True)

@@ -1,563 +1,273 @@
-<!DOCTYPE html>
-<html lang="sv">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Access Control Test Report</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.0/font/bootstrap-icons.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .dashboard-container {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            margin: 20px auto;
-            padding: 30px;
-            max-width: 1400px;
-        }
-        
-        .metric-card {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            border-radius: 15px;
-            padding: 25px;
-            text-align: center;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            border: none;
-        }
-        
-        .metric-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
-        }
-        
-        .metric-card.critical {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-        }
-        
-        .metric-card.high {
-            background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
-        }
-        
-        .metric-card.medium {
-            background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%);
-        }
-        
-        .metric-card.low {
-            background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
-        }
-        
-        .chart-container {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-            height: 400px;
-            position: relative;
-        }
-        
-        .chart-container canvas {
-            max-height: 300px !important;
-        }
-        
-        .chart-container.small {
-            height: 350px;
-        }
-        
-        .chart-container.large {
-            height: 450px;
-        }
-        
-        .chart-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        .test-details {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .details-table {
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .table-responsive {
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        
-        .btn-load-report {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 25px;
-            padding: 12px 30px;
-            color: white;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-load-report:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-            color: white;
-        }
-        
-        .file-input-container {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
-        }
-        
-        .file-input-container input[type=file] {
-            position: absolute;
-            left: -9999px;
-        }
-        
-        .animate-slide-in {
-            animation: slideIn 0.6s ease-out;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .no-data-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-        }
-        
-        .no-data-state i {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-        
-        /* Prevent excessive spacing */
-        .row {
-            margin-bottom: 0;
-        }
-        
-        .container-fluid {
-            padding: 10px;
-        }
-        
-        /* Limit table height */
-        .table-responsive {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="dashboard-container">
-            <!-- Header -->
-            <div class="text-center mb-4">
-                <h1 class="display-4 fw-bold text-primary">
-                    <i class="bi bi-shield-check"></i>
-                    Access Control Test Report
-                </h1>
-                <p class="lead text-muted">Grafisk analys av säkerhetstester</p>
-            </div>
+{% extends "base.html" %}
+{% block title %}Access Control Rapport{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">
+                <i class="bi bi-shield-check"></i> Access Control Testrapporter
+            </h1>
             
-            <!-- File Upload -->
-            <div class="row mb-4">
-                <div class="col-12 text-center">
-                    <div class="file-input-container">
-                        <input type="file" id="reportFile" accept=".json" onchange="loadReport(event)">
-                        <label for="reportFile" class="btn btn-load-report">
-                            <i class="bi bi-upload"></i>
-                            Ladda Test Report JSON
-                        </label>
-                    </div>
-                    <p class="text-muted mt-2">Välj en JSON-fil från dina Access Control tester</p>
+            <!-- Filväljare -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Välj Testrapport</h4>
+                </div>
+                <div class="card-body">
+                    {% if test_results %}
+                        <p class="text-muted">Välj en testrapport från listan nedan för att visa detaljer:</p>
+                        
+                        <div class="row">
+                            {% for test_summary in test_results %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card {% if selected_test_file == test_summary.filename %}border-primary{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            {{ test_summary.get('test_description') or 'Test ' + test_summary.get('test_id', 'unknown') }}
+                                        </h6>
+                                        
+                                        <div class="mb-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-calendar"></i> 
+                                                {% if test_summary.get('timestamp') %}
+                                                    {{ datetime.fromtimestamp(test_summary.timestamp).strftime('%Y-%m-%d %H:%M') }}
+                                                {% else %}
+                                                    Okänt datum
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                        
+                                        <div class="mb-2">
+                                            <span class="badge bg-info">{{ test_summary.get('total_tests', 0) }} tester</span>
+                                            {% if test_summary.get('risk_level') == 'CRITICAL' %}
+                                                <span class="badge bg-danger">{{ test_summary.get('risk_level') }}</span>
+                                            {% elif test_summary.get('risk_level') == 'HIGH' %}
+                                                <span class="badge bg-warning">{{ test_summary.get('risk_level') }}</span>
+                                            {% elif test_summary.get('risk_level') == 'MEDIUM' %}
+                                                <span class="badge bg-primary">{{ test_summary.get('risk_level') }}</span>
+                                            {% else %}
+                                                <span class="badge bg-success">{{ test_summary.get('risk_level', 'LOW') }}</span>
+                                            {% endif %}
+                                            
+                                            {% if test_summary.get('potential_issues', 0) > 0 %}
+                                                <span class="badge bg-danger">{{ test_summary.get('potential_issues') }} problem</span>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="mb-2">
+                                            <small>
+                                                <strong>URLs från:</strong> {{ test_summary.get('url_session', 'unknown') }}<br>
+                                                <strong>Credentials från:</strong> {{ test_summary.get('credentials_session', 'unknown') }}
+                                            </small>
+                                        </div>
+                                        
+                                        <a href="{{ url_for('access_control_report', test_file=test_summary.get('filename')) }}" 
+                                           class="btn btn-sm {% if selected_test_file == test_summary.get('filename') %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                                            {% if selected_test_file == test_summary.get('filename') %}
+                                                <i class="bi bi-eye-fill"></i> Visas
+                                            {% else %}
+                                                <i class="bi bi-eye"></i> Visa
+                                            {% endif %}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <h5><i class="bi bi-info-circle"></i> Inga testrapporter tillgängliga</h5>
+                            <p>Det finns inga access control testrapporter att visa än.</p>
+                            <a href="{{ url_for('access_control') }}" class="btn btn-primary">
+                                <i class="bi bi-arrow-left"></i> Gå till Access Control Testing
+                            </a>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
             
-            <!-- No Data State -->
-            <div id="noDataState" class="no-data-state">
-                <i class="bi bi-file-earmark-text"></i>
-                <h3>Ingen rapport laddad</h3>
-                <p>Ladda upp en Access Control test report JSON-fil för att se grafisk analys</p>
-            </div>
-            
-            <!-- Report Content (Initially Hidden) -->
-            <div id="reportContent" style="display: none;">
-                
-                <!-- Test Overview -->
-                <div id="testOverview" class="test-details animate-slide-in">
-                    <h3><i class="bi bi-info-circle"></i> Test Översikt</h3>
-                    <div class="row">
+            <!-- Detaljerad rapportvisning -->
+            {% if selected_test_data %}
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-file-text"></i> 
+                        Testrapport: {{ selected_test_data.get('test_description') or selected_test_data.get('test_id', 'unknown') }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Rapportsammanfattning -->
+                    <div class="row mb-4">
                         <div class="col-md-6">
-                            <p><strong>Test ID:</strong> <span id="testId"></span></p>
-                            <p><strong>Beskrivning:</strong> <span id="testDescription"></span></p>
-                            <p><strong>Datum:</strong> <span id="testDate"></span></p>
+                            <h6>Testinformation</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Test ID:</strong></td>
+                                    <td>{{ selected_test_data.get('test_id', 'unknown') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Datum:</strong></td>
+                                    <td>
+                                        {% if selected_test_data.get('timestamp') %}
+                                            {{ datetime.fromtimestamp(selected_test_data.timestamp).strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {% else %}
+                                            Okänt datum
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>URLs från session:</strong></td>
+                                    <td>{{ selected_test_data.get('urls_session', 'unknown') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Credentials från session:</strong></td>
+                                    <td>{{ selected_test_data.get('credentials_session', 'unknown') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Totalt testade URLs:</strong></td>
+                                    <td>{{ selected_test_data.get('total_tests', 0) }}</td>
+                                </tr>
+                            </table>
                         </div>
                         <div class="col-md-6">
-                            <p><strong>URL Session:</strong> <span id="urlSession"></span></p>
-                            <p><strong>Credentials Session:</strong> <span id="credentialsSession"></span></p>
-                            <p><strong>Totalt testade URLs:</strong> <span id="totalTests"></span></p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Metrics Cards -->
-                <div class="row mb-4">
-                    <div class="col-md-3 mb-3">
-                        <div class="card metric-card critical">
-                            <h3 id="criticalCount">0</h3>
-                            <p>CRITICAL</p>
-                            <i class="bi bi-exclamation-triangle-fill"></i>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card metric-card high">
-                            <h3 id="highCount">0</h3>
-                            <p>HIGH</p>
-                            <i class="bi bi-exclamation-circle-fill"></i>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card metric-card medium">
-                            <h3 id="mediumCount">0</h3>
-                            <p>MEDIUM</p>
-                            <i class="bi bi-info-circle-fill"></i>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card metric-card low">
-                            <h3 id="lowCount">0</h3>
-                            <p>LOW</p>
-                            <i class="bi bi-check-circle-fill"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Charts Row -->
-                <div class="row">
-                    <!-- Risk Level Distribution -->
-                    <div class="col-lg-6 mb-4">
-                        <div class="chart-container small">
-                            <h4 class="chart-title">Risknivå Distribution</h4>
-                            <canvas id="riskChart"></canvas>
+                            <h6>Riskanalys</h6>
+                            <div class="mb-3">
+                                <h4>
+                                    <span class="badge 
+                                        {% if selected_test_data.get('risk_level') == 'CRITICAL' %}bg-danger
+                                        {% elif selected_test_data.get('risk_level') == 'HIGH' %}bg-warning
+                                        {% elif selected_test_data.get('risk_level') == 'MEDIUM' %}bg-primary
+                                        {% else %}bg-success{% endif %}">
+                                        {{ selected_test_data.get('risk_level', 'LOW') }}
+                                    </span>
+                                </h4>
+                            </div>
+                            
+                            {% if selected_test_data.get('analysis') %}
+                            <div class="alert alert-light">
+                                <h6>Resultatsammanfattning:</h6>
+                                {% for risk_level, count in selected_test_data.get('analysis', {}).get('by_risk_level', {}).items() %}
+                                    {% if count > 0 %}
+                                    <span class="badge 
+                                        {% if risk_level == 'CRITICAL' %}bg-danger
+                                        {% elif risk_level == 'HIGH' %}bg-warning
+                                        {% elif risk_level == 'MEDIUM' %}bg-primary
+                                        {% else %}bg-secondary{% endif %} me-1">
+                                        {{ risk_level }}: {{ count }}
+                                    </span>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                     
-                    <!-- Category Distribution -->
-                    <div class="col-lg-6 mb-4">
-                        <div class="chart-container small">
-                            <h4 class="chart-title">URL Kategorier</h4>
-                            <canvas id="categoryChart"></canvas>
-                        </div>
+                    <!-- Detaljerade testresultat -->
+                    {% if selected_test_data.get('test_results') %}
+                    <h6>Detaljerade Testresultat</h6>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>URL</th>
+                                    <th>Metod</th>
+                                    <th>Kategori</th>
+                                    <th>Risk</th>
+                                    <th>Resultat</th>
+                                    <th>Statuskoder</th>
+                                    <th>Detaljer</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in selected_test_data.get('test_results', []) %}
+                                <tr>
+                                    <td>
+                                        <small>{{ result.get('url', 'unknown') }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ result.get('method', 'GET') }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">{{ result.get('category', 'other') }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if result.get('risk_level') == 'CRITICAL' %}bg-danger
+                                            {% elif result.get('risk_level') == 'HIGH' %}bg-warning
+                                            {% elif result.get('risk_level') == 'MEDIUM' %}bg-primary
+                                            {% elif result.get('risk_level') == 'LOW' %}bg-success
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ result.get('risk_level', 'UNKNOWN') }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if result.get('finding') == 'ACCESS_GRANTED' %}bg-danger
+                                            {% elif result.get('finding') == 'PARTIAL_ACCESS' %}bg-warning
+                                            {% elif result.get('finding') == 'ACCESS_DENIED' %}bg-success
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ result.get('finding', 'UNKNOWN').replace('_', ' ') }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            {% if result.get('original_status_code') %}
+                                                Orig: {{ result.get('original_status_code') }}<br>
+                                            {% endif %}
+                                            {% if result.get('test_status_code') %}
+                                                Test: {{ result.get('test_status_code') }}
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if result.get('explanation') %}
+                                        <button class="btn btn-sm btn-outline-info" type="button" 
+                                                data-bs-toggle="collapse" 
+                                                data-bs-target="#detail-{{ loop.index }}" 
+                                                aria-expanded="false">
+                                            <i class="bi bi-info-circle"></i>
+                                        </button>
+                                        <div class="collapse mt-2" id="detail-{{ loop.index }}">
+                                            <div class="card card-body">
+                                                <small>{{ result.get('explanation') }}</small>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-                
-                <!-- Findings Chart -->
-                <div class="row">
-                    <div class="col-12 mb-4">
-                        <div class="chart-container large">
-                            <h4 class="chart-title">Säkerhetsbrister per Typ</h4>
-                            <canvas id="findingsChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Detailed Results Table -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="chart-container" style="height: auto; max-height: 600px; overflow-y: auto;">
-                            <h4 class="chart-title">Detaljerade Testresultat</h4>
-                            <div class="table-responsive">
-                                <table class="table table-striped details-table table-sm">
-                                    <thead class="table-dark">
-                                        <tr>
-                                            <th>URL</th>
-                                            <th>Risknivå</th>
-                                            <th>Resultat</th>
-                                            <th>Kategori</th>
-                                            <th>Status Code</th>
-                                            <th>Beskrivning</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="resultsTableBody">
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                    {% endif %}
+                    
+                    <!-- JSON Export -->
+                    <div class="mt-4">
+                        <button class="btn btn-outline-secondary" onclick="downloadAsJSON()">
+                            <i class="bi bi-download"></i> Ladda ner som JSON
+                        </button>
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
+</div>
 
-    <script>
-        let chartInstances = {};
-
-        function loadReport(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const reportData = JSON.parse(e.target.result);
-                    displayReport(reportData);
-                } catch (error) {
-                    alert('Fel vid läsning av JSON-fil: ' + error.message);
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function displayReport(data) {
-            // Hide no data state and show report content
-            document.getElementById('noDataState').style.display = 'none';
-            document.getElementById('reportContent').style.display = 'block';
-
-            // Fill test overview
-            document.getElementById('testId').textContent = data.test_id || 'N/A';
-            document.getElementById('testDescription').textContent = data.test_description || 'N/A';
-            document.getElementById('testDate').textContent = formatDate(data.timestamp);
-            document.getElementById('urlSession').textContent = data.urls_session || 'N/A';
-            document.getElementById('credentialsSession').textContent = data.credentials_session || 'N/A';
-            document.getElementById('totalTests').textContent = data.total_tests || 0;
-
-            // Update metric cards
-            const riskLevels = data.analysis?.by_risk_level || {};
-            document.getElementById('criticalCount').textContent = riskLevels.CRITICAL || 0;
-            document.getElementById('highCount').textContent = riskLevels.HIGH || 0;
-            document.getElementById('mediumCount').textContent = riskLevels.MEDIUM || 0;
-            document.getElementById('lowCount').textContent = riskLevels.LOW || 0;
-
-            // Create charts
-            createRiskChart(riskLevels);
-            createCategoryChart(data.analysis?.by_category || {});
-            createFindingsChart(data.analysis?.by_finding || {});
-            
-            // Fill results table
-            fillResultsTable(data.test_results || []);
-        }
-
-        function createRiskChart(riskData) {
-            const ctx = document.getElementById('riskChart').getContext('2d');
-            
-            if (chartInstances.riskChart) {
-                chartInstances.riskChart.destroy();
-            }
-
-            chartInstances.riskChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
-                    datasets: [{
-                        data: [
-                            riskData.CRITICAL || 0,
-                            riskData.HIGH || 0,
-                            riskData.MEDIUM || 0,
-                            riskData.LOW || 0
-                        ],
-                        backgroundColor: [
-                            '#ff6b6b',
-                            '#ffa726',
-                            '#42a5f5',
-                            '#66bb6a'
-                        ],
-                        borderWidth: 3,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    aspectRatio: 1.2,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 15,
-                                font: {
-                                    size: 12,
-                                    weight: 'bold'
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createCategoryChart(categoryData) {
-            const ctx = document.getElementById('categoryChart').getContext('2d');
-            
-            if (chartInstances.categoryChart) {
-                chartInstances.categoryChart.destroy();
-            }
-
-            const labels = Object.keys(categoryData);
-            const data = Object.values(categoryData);
-            
-            chartInstances.categoryChart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: [
-                            '#e91e63',
-                            '#9c27b0',
-                            '#673ab7',
-                            '#3f51b5',
-                            '#2196f3',
-                            '#00bcd4',
-                            '#009688',
-                            '#4caf50'
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    aspectRatio: 1.2,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 10,
-                                font: {
-                                    size: 10
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createFindingsChart(findingsData) {
-            const ctx = document.getElementById('findingsChart').getContext('2d');
-            
-            if (chartInstances.findingsChart) {
-                chartInstances.findingsChart.destroy();
-            }
-
-            const labels = Object.keys(findingsData);
-            const data = Object.values(findingsData);
-
-            chartInstances.findingsChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Antal förekomster',
-                        data: data,
-                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
-                        borderColor: 'rgba(102, 126, 234, 1)',
-                        borderWidth: 2,
-                        borderRadius: 5
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    aspectRatio: 2.5,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                maxRotation: 45,
-                                font: {
-                                    size: 11
-                                }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-        }
-
-        function fillResultsTable(results) {
-            const tbody = document.getElementById('resultsTableBody');
-            tbody.innerHTML = '';
-
-            results.forEach(result => {
-                const row = document.createElement('tr');
-                
-                // Risk level badge
-                const riskBadge = getRiskBadge(result.risk_level);
-                
-                row.innerHTML = `
-                    <td><small>${truncateUrl(result.url || 'N/A')}</small></td>
-                    <td>${riskBadge}</td>
-                    <td><small>${result.finding || 'N/A'}</small></td>
-                    <td><span class="badge bg-secondary">${result.category || 'N/A'}</span></td>
-                    <td><span class="badge bg-info">${result.status_code || 'N/A'}</span></td>
-                    <td><small>${result.description || 'N/A'}</small></td>
-                `;
-                
-                tbody.appendChild(row);
-            });
-        }
-
-        function getRiskBadge(riskLevel) {
-            const badges = {
-                'CRITICAL': '<span class="badge bg-danger">CRITICAL</span>',
-                'HIGH': '<span class="badge bg-warning">HIGH</span>',
-                'MEDIUM': '<span class="badge bg-primary">MEDIUM</span>',
-                'LOW': '<span class="badge bg-success">LOW</span>'
-            };
-            return badges[riskLevel] || '<span class="badge bg-secondary">UNKNOWN</span>';
-        }
-
-        function truncateUrl(url, maxLength = 50) {
-            if (url.length <= maxLength) return url;
-            return url.substring(0, maxLength) + '...';
-        }
-
-        function formatDate(timestamp) {
-            if (!timestamp) return 'N/A';
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleString('sv-SE');
-        }
-    </script>
-</body>
-</html>
+<script>
+function downloadAsJSON() {
+    {% if selected_test_data %}
+    const data = {{ selected_test_data | tojson }};
+    const dataStr = JSON.stringify(data, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = 'access_control_test_{{ selected_test_data.get("test_id", "unknown") }}.json';
+    link.click();
+    {% endif %}
+}
+</script>
+{% endblock %}
