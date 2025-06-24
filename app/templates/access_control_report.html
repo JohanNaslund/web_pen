@@ -37,9 +37,17 @@
                                         <div class="mb-2">
                                             <span class="badge bg-info">{{ test.total_tests or 0 }} tester</span>
                                             
-                                            {% set unauthorized_count = test.analysis.unauthorized_access_count if test.analysis and test.analysis.unauthorized_access_count else 0 %}
+                                            {# FIX: Använd rätt syntax för att hämta obehöriga åtkomster #}
+                                            {% set unauthorized_count = test.analysis.by_finding.get('UNAUTHORIZED_ACCESS', 0) if test.analysis and test.analysis.by_finding else 0 %}
+                                            {% set redirect_count = test.analysis.by_finding.get('REDIRECT_RESPONSE', 0) if test.analysis and test.analysis.by_finding else 0 %}
+                                            {% set access_denied_count = test.analysis.by_finding.get('ACCESS_DENIED', 0) if test.analysis and test.analysis.by_finding else 0 %}
+                                            
                                             {% if unauthorized_count > 0 %}
                                                 <span class="badge bg-danger">{{ unauthorized_count }} OBEHÖRIGA</span>
+                                            {% elif redirect_count > 0 %}
+                                                <span class="badge bg-warning">{{ redirect_count }} OMDIRIGERINGAR</span>
+                                            {% elif access_denied_count > 0 %}
+                                                <span class="badge bg-success">{{ access_denied_count }} KORREKT NEKAD</span>
                                             {% else %}
                                                 <span class="badge bg-success">INGA BROTT</span>
                                             {% endif %}
@@ -64,8 +72,8 @@
                         </div>
                     {% else %}
                         <div class="text-center text-muted">
-                            <i class="bi bi-folder"></i>
-                            <p>Inga testrapporter hittades. Kör ett access control test först.</p>
+                            <i class="bi bi-clipboard-x"></i>
+                            <p>Inga testrapporter tillgängliga. Kör ett access control test först.</p>
                             <a href="/access-control" class="btn btn-primary">Gå till Access Control Testing</a>
                         </div>
                     {% endif %}
@@ -100,18 +108,18 @@
                     {% elif redirect_count > 0 %}
                     <div class="alert alert-warning">
                         <h5 class="mb-2">
-                            <i class="bi bi-arrow-right-circle"></i> 
+                            <i class="bi bi-arrow-repeat"></i> 
                             <strong>{{ redirect_count }} Omdirigeringar upptäckta</strong>
                         </h5>
-                        <p class="mb-0">Kontrollera manuellt vart användaren omdirigeras.</p>
+                        <p class="mb-0">Kontrollera att omdirigeringarna går till rätt destination.</p>
                     </div>
                     {% else %}
                     <div class="alert alert-success">
                         <h5 class="mb-2">
                             <i class="bi bi-shield-check"></i> 
-                            <strong>Access Control fungerar korrekt</strong>
+                            <strong>Inga kritiska problem upptäckta</strong>
                         </h5>
-                        <p class="mb-0">Inga obehöriga åtkomster upptäckta.</p>
+                        <p class="mb-0">Access control verkar fungera korrekt.</p>
                     </div>
                     {% endif %}
                     
@@ -203,7 +211,7 @@
                             </thead>
                             <tbody>
                                 {% for result in selected_test_data.test_results %}
-                                <tr class="{% if result.finding == 'UNAUTHORIZED_ACCESS' %}table-danger{% elif result.finding == 'REDIRECT_RESPONSE' %}table-warning{% elif result.finding == 'ACCESS_DENIED' %}table-success{% endif %}">
+                                <tr class="{% if result.finding == 'UNAUTHORIZED_ACCESS' %}table-danger{% elif result.finding == 'REDIRECT_RESPONSE' %}table-warning{% elif result.finding == 'ACCESS_DENIED' %}table-success{% else %}table-light{% endif %}">
                                     <td>
                                         <small class="text-truncate d-inline-block" style="max-width: 300px;" title="{{ result.url }}">
                                             {{ result.url }}
