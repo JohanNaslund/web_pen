@@ -22,6 +22,10 @@ import urllib.parse
 import traceback
 import socket
 import subprocess
+from weasyprint import HTML, CSS
+from weasyprint.text.fonts import FontConfiguration
+import tempfile
+from flask import make_response
 
 active_recordings = {}
 
@@ -3225,7 +3229,696 @@ def access_control_report():
                         selected_test_data=selected_test_data,
                         datetime=datetime)  # Skicka datetime till templaten
         return redirect(url_for('access_control'))
+
+@app.route('/api/download-pdf-report')
+def download_pdf_report():
+    """Generera och ladda ner PDF-rapport"""
+    try:
+        target_url = session.get('target_url', '')
+        
+        if not target_url:
+            flash("Vänligen konfigurera ett mål först.", "warning")
+            return redirect(url_for('target'))
+        
+        # Hämta sårbarhetsdata direkt från ZAP API (samma logik som api_zap_alerts_by_risk)
+        try:
+            alerts_data = get_zap_alerts_data(target_url)
+            if 'error' in alerts_data:
+                return jsonify({'error': f'Kunde inte hämta sårbarhetsdata: {alerts_data["error"]}'}), 500
+        except Exception as e:
+            return jsonify({'error': f'Fel vid hämtning av data: {str(e)}'}), 500
+        
+        # Skapa rapport-ID och datum
+        report_id = str(uuid.uuid4())
+        report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Få faktisk alerts data från alerts_by_risk objektet
+        alerts_by_risk = alerts_data.get('alerts_by_risk', {})
+        
+        # Räkna sårbarheter per risknivå
+        risk_counts = {
+            'high': len(alerts_by_risk.get('highAlerts', [])),
+            'medium': len(alerts_by_risk.get('mediumAlerts', [])),
+            'low': len(alerts_by_risk.get('lowAlerts', [])),
+            'info': len(alerts_by_risk.get('infoAlerts', []))
+        }
+        
+        # Organisera data för PDF-template
+        organized_data = organize_alerts_by_type_and_risk(alerts_by_risk)
+        
+        # Rendera HTML-template för PDF
+        html_content = render_template('pdf_report.html',
+            target_url=target_url,
+            report_id=report_id,
+            report_date=report_date,
+            risk_counts=risk_counts,
+            organized_data=organized_data
+        )
+        
+        # Skapa PDF
+        pdf_file = generate_pdf_from_html(html_content)
+        
+        # Skapa response med PDF
+        response = make_response(pdf_file)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="sakerheterapport_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Error generating PDF report: {str(e)}")
+        return jsonify({'error': f'Fel vid generering av PDF: {str(e)}'}), 500
+
+
+def organize_alerts_by_type_and_risk(alerts_by_risk):
+    """Organisera alerts efter typ och risk för PDF-rapporten"""
+    organized = {
+        'high': {},
+        'medium': {},
+        'low': {},
+        'info': {}
+    }
     
+    risk_mappings = {
+        'highAlerts': 'high',
+        'mediumAlerts': 'medium', 
+        'lowAlerts': 'low',
+        'infoAlerts': 'info'
+    }
+    
+    for risk_key, alerts in alerts_by_risk.items():
+        if risk_key in risk_mappings:
+            risk_level = risk_mappings[risk_key]
+            
+            # Gruppera alerts efter typ (namn)
+            for alert in alerts:
+                alert_name = alert.get('name', 'Okänd sårbarhet')
+                
+                if alert_name not in organized[risk_level]:
+                    organized[risk_level][alert_name] = {
+                        'description': alert.get('description', 'Ingen beskrivning tillgänglig'),
+                        'risk': alert.get('risk', 'N/A'),
+                        'confidence': alert.get('confidence', 'N/A'),
+                        'solution': alert.get('solution', 'Inga åtgärdsförslag tillgängliga'),
+                        'reference': alert.get('reference', ''),
+                        'cweid': alert.get('cweid', ''),
+                        'wascid': alert.get('wascid', ''),
+                        'tags': alert.get('tags', {}),
+                        'instances': []
+                    }
+                
+                # Lägg till denna instans
+                organized[risk_level][alert_name]['instances'].append({
+                    'url': alert.get('url', 'N/A'),
+                    'param': alert.get('param', 'N/A'),
+                    'attack': alert.get('attack', 'N/A')
+                })
+    
+    return organized
+
+
+def get_zap_alerts_data(target_url):
+    return get_zap_alerts_data_fixed(target_url)
+    """Hämta sårbarhetsdata från ZAP API direkt (samma logik som api_zap_alerts_by_risk)"""
+    try:
+        # Kontrollera om ZAP är tillgänglig
+        if not zap.is_available():
+            return {'error': 'ZAP is not available'}
+        
+        # Anropa ZAP API för att hämta sårbarheter efter risk
+        api_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/alert/view/alertsByRisk/"
+        response = requests.get(api_url, params={
+            'apikey': ZAP_API_KEY,
+            'url': target_url,
+            'recurse': 'true'
+        }, timeout=10)
+        
+        if response.status_code != 200:
+            return {'error': f'ZAP API returned status code {response.status_code}'}
+        
+        # Få rådata
+        raw_data = response.json()
+        
+        # Omstrukturera data för att matcha förväntad format
+        processed_data = {
+            'highAlerts': [],
+            'mediumAlerts': [],
+            'lowAlerts': [],
+            'infoAlerts': []
+        }
+        
+        # Loopa igenom raw_data för att extrahera alerts
+        if 'alertsByRisk' in raw_data:
+            for risk_group in raw_data['alertsByRisk']:
+                # Processa High alerts
+                if 'High' in risk_group:
+                    for alert_type in risk_group['High']:
+                        for alert_name, alerts in alert_type.items():
+                            for alert in alerts:
+                                alert['name'] = alert_name
+                                processed_data['highAlerts'].append(alert)
+                
+                # Processa Medium alerts
+                if 'Medium' in risk_group:
+                    for alert_type in risk_group['Medium']:
+                        for alert_name, alerts in alert_type.items():
+                            for alert in alerts:
+                                alert['name'] = alert_name
+                                processed_data['mediumAlerts'].append(alert)
+                
+                # Processa Low alerts
+                if 'Low' in risk_group:
+                    for alert_type in risk_group['Low']:
+                        for alert_name, alerts in alert_type.items():
+                            for alert in alerts:
+                                alert['name'] = alert_name
+                                processed_data['lowAlerts'].append(alert)
+                
+                # Processa Informational alerts
+                if 'Informational' in risk_group:
+                    for alert_type in risk_group['Informational']:
+                        for alert_name, alerts in alert_type.items():
+                            for alert in alerts:
+                                alert['name'] = alert_name
+                                processed_data['infoAlerts'].append(alert)
+        
+        # Hämta sammanfattning
+        summary_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/alert/view/alertsSummary/"
+        summary_response = requests.get(summary_url, params={
+            'apikey': ZAP_API_KEY,
+            'baseurl': target_url
+        }, timeout=10)
+        
+        if summary_response.status_code != 200:
+            return {'error': f'ZAP API returned status code {summary_response.status_code}'}
+        
+        # Extrahera summary från nästlad struktur
+        raw_summary = summary_response.json()
+        summary = {}
+        
+        if 'alertsSummary' in raw_summary:
+            summary = raw_summary['alertsSummary']
+        
+        # Kombinera resultaten
+        return {
+            'alerts_by_risk': processed_data,
+            'summary': summary
+        }
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching ZAP alerts for PDF: {str(e)}")
+        return {'error': f'Error fetching ZAP alerts: {str(e)}'}
+
+
+def generate_pdf_from_html(html_content):
+    """Generera PDF från HTML-innehåll med WeasyPrint"""
+    try:
+        # CSS för PDF-styling
+        css_content = """
+        @page {
+            size: A4;
+            margin: 2cm;
+            @top-center {
+                content: "Säkerhetsrapport";
+                font-size: 10pt;
+                color: #666;
+            }
+            @bottom-center {
+                content: counter(page) " av " counter(pages);
+                font-size: 10pt;
+                color: #666;
+            }
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #333;
+        }
+        
+        .header {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .risk-high { color: #dc3545; font-weight: bold; }
+        .risk-medium { color: #fd7e14; font-weight: bold; }
+        .risk-low { color: #17a2b8; font-weight: bold; }
+        .risk-info { color: #6c757d; font-weight: bold; }
+        
+        .vulnerability-section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .vulnerability-header {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            margin-bottom: 15px;
+        }
+        
+        .vulnerability-details {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .detail-item {
+            margin-bottom: 15px;
+        }
+        
+        .detail-item h4 {
+            margin-bottom: 5px;
+            color: #495057;
+        }
+        
+        .detail-grid {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .detail-grid .detail-item {
+            flex: 1;
+        }
+        
+        .instances-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .instances-table th,
+        .instances-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            word-break: break-all;
+        }
+        
+        .instances-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .summary-grid {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            text-align: center;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            flex: 1;
+            margin: 0 10px;
+        }
+        
+        .summary-card:first-child {
+            margin-left: 0;
+        }
+        
+        .summary-card:last-child {
+            margin-right: 0;
+        }
+        
+        .risk-category {
+            page-break-before: auto;
+            margin-bottom: 40px;
+        }
+        
+        .risk-category h2 {
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+        
+        .no-vulnerabilities {
+            text-align: center;
+            padding: 40px;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+        }
+        """
+        
+        # Skapa CSS-objekt
+        css = CSS(string=css_content)
+        
+        # Generera PDF
+        html_doc = HTML(string=html_content)
+        pdf_bytes = html_doc.write_pdf(stylesheets=[css])
+        
+        return pdf_bytes
+        
+    except Exception as e:
+        app.logger.error(f"Error in PDF generation: {str(e)}")
+        raise e
+
+
+@app.route('/debug-pdf')
+def debug_pdf():
+    """Debug-route för att testa PDF-generering"""
+    try:
+        target_url = session.get('target_url', 'http://example.com')
+        
+        # Testa att hämta data
+        print("Testar att hämta ZAP data...")
+        alerts_data = get_zap_alerts_data(target_url)
+        
+        debug_info = {
+            'target_url': target_url,
+            'zap_available': zap.is_available(),
+            'alerts_data_keys': list(alerts_data.keys()) if isinstance(alerts_data, dict) else 'Not a dict',
+            'has_error': 'error' in alerts_data if isinstance(alerts_data, dict) else False
+        }
+        
+        if 'error' in alerts_data:
+            debug_info['error'] = alerts_data['error']
+            return jsonify(debug_info)
+        
+        # Visa debug-info från datahämtning
+        if 'debug_info' in alerts_data:
+            debug_info['data_fetch_debug'] = alerts_data['debug_info']
+        
+        # Testa att organisera data
+        alerts_by_risk = alerts_data.get('alerts_by_risk', {})
+        organized_data = organize_alerts_by_type_and_risk(alerts_by_risk)
+        
+        debug_info['organized_data_keys'] = {
+            'high': len(organized_data.get('high', {})),
+            'medium': len(organized_data.get('medium', {})),
+            'low': len(organized_data.get('low', {})),
+            'info': len(organized_data.get('info', {}))
+        }
+        
+        # Visa detaljer om första högrisksårbarheten
+        if organized_data.get('high'):
+            first_vuln_name = list(organized_data['high'].keys())[0]
+            first_vuln = organized_data['high'][first_vuln_name]
+            debug_info['sample_vulnerability'] = {
+                'name': first_vuln_name,
+                'has_description': bool(first_vuln.get('description')),
+                'has_solution': bool(first_vuln.get('solution')),
+                'description_preview': first_vuln.get('description', 'missing')[:100] + '...',
+                'solution_preview': first_vuln.get('solution', 'missing')[:100] + '...',
+                'instances_count': len(first_vuln.get('instances', []))
+            }
+        
+        # Testa att rendera HTML
+        try:
+            risk_counts = {
+                'high': len(alerts_by_risk.get('highAlerts', [])),
+                'medium': len(alerts_by_risk.get('mediumAlerts', [])),
+                'low': len(alerts_by_risk.get('lowAlerts', [])),
+                'info': len(alerts_by_risk.get('infoAlerts', []))
+            }
+            
+            html_content = render_template('pdf_report.html',
+                target_url=target_url,
+                report_id="debug-test",
+                report_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                risk_counts=risk_counts,
+                organized_data=organized_data
+            )
+            
+            debug_info['html_length'] = len(html_content)
+            debug_info['html_preview'] = html_content[:200] + "..." if len(html_content) > 200 else html_content
+            
+        except Exception as html_error:
+            debug_info['html_error'] = str(html_error)
+            return jsonify(debug_info)
+        
+        # Testa PDF-generering
+        try:
+            pdf_bytes = generate_pdf_from_html(html_content)
+            debug_info['pdf_size'] = len(pdf_bytes)
+            debug_info['pdf_generation'] = 'success'
+            
+        except Exception as pdf_error:
+            debug_info['pdf_error'] = str(pdf_error)
+            debug_info['pdf_generation'] = 'failed'
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'type': type(e).__name__,
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+# Lägg också till en enkel test-route som returnerar HTML istället för PDF
+@app.route('/test-pdf-html')
+def test_pdf_html():
+    """Returnera HTML-versionen av PDF-rapporten för testning"""
+    try:
+        target_url = session.get('target_url', 'http://example.com')
+        
+        # Skapa testdata om ZAP inte är tillgänglig
+        if not zap.is_available():
+            # Skapa dummy-data för testning
+            alerts_by_risk = {
+                'highAlerts': [
+                    {
+                        'name': 'SQL Injection',
+                        'description': 'En SQL injection-sårbarhet upptäcktes',
+                        'risk': 'High',
+                        'confidence': 'High',
+                        'solution': 'Använd parameteriserade queries',
+                        'reference': 'https://owasp.org/www-community/attacks/SQL_Injection',
+                        'cweid': '89',
+                        'wascid': '19',
+                        'url': 'http://example.com/login',
+                        'param': 'username',
+                        'attack': "' OR '1'='1"
+                    }
+                ],
+                'mediumAlerts': [],
+                'lowAlerts': [],
+                'infoAlerts': []
+            }
+        else:
+            # Hämta riktig data
+            alerts_data = get_zap_alerts_data(target_url)
+            if 'error' in alerts_data:
+                return f"<h1>Fel: {alerts_data['error']}</h1>"
+            alerts_by_risk = alerts_data.get('alerts_by_risk', {})
+        
+        # Organisera data
+        organized_data = organize_alerts_by_type_and_risk(alerts_by_risk)
+        
+        # Räkna sårbarheter
+        risk_counts = {
+            'high': len(alerts_by_risk.get('highAlerts', [])),
+            'medium': len(alerts_by_risk.get('mediumAlerts', [])),
+            'low': len(alerts_by_risk.get('lowAlerts', [])),
+            'info': len(alerts_by_risk.get('infoAlerts', []))
+        }
+        
+        # Rendera och returnera HTML
+        return render_template('pdf_report.html',
+            target_url=target_url,
+            report_id="test-html",
+            report_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            risk_counts=risk_counts,
+            organized_data=organized_data
+        )
+        
+    except Exception as e:
+        return f"<h1>Fel: {str(e)}</h1><pre>{traceback.format_exc()}</pre>"
+    
+
+def get_zap_alerts_data_simplified(target_url):
+    """Förenklad datahämtning som använder befintliga Flask API-endpoints"""
+    try:
+        # Använd samma API-endpoint som webbrapporten använder
+        from flask import current_app
+        
+        with current_app.test_request_context():
+            # Simulera en request till vår egen API
+            from flask import session as temp_session
+            temp_session['target_url'] = target_url
+            
+            # Anropa samma funktion som webbrapporten använder
+            api_response = api_zap_alerts_by_risk()
+            
+            # Hantera Flask Response-objekt
+            if hasattr(api_response, 'json'):
+                alerts_data = api_response.json
+            elif isinstance(api_response, tuple):
+                alerts_data = api_response[0]  # (data, status_code)
+            else:
+                alerts_data = api_response
+            
+            if 'error' in alerts_data:
+                return alerts_data
+            
+            alerts_by_risk = alerts_data.get('alerts_by_risk', {})
+            
+            # Hämta detaljerad information för varje alert
+            for risk_level in ['highAlerts', 'mediumAlerts', 'lowAlerts', 'infoAlerts']:
+                for alert in alerts_by_risk.get(risk_level, []):
+                    alert_id = alert.get('id')
+                    if alert_id:
+                        try:
+                            # Använd vår befintliga API-endpoint
+                            detail_response = api_alert_details(alert_id)
+                            
+                            if hasattr(detail_response, 'json'):
+                                detail_data = detail_response.json
+                            elif isinstance(detail_response, tuple):
+                                detail_data = detail_response[0]
+                            else:
+                                detail_data = detail_response
+                            
+                            if 'alert' in detail_data:
+                                detail = detail_data['alert']
+                                # Uppdatera med detaljerad information
+                                alert.update({
+                                    'description': detail.get('description', ''),
+                                    'solution': detail.get('solution', ''),
+                                    'reference': detail.get('reference', ''),
+                                    'cweid': detail.get('cweid', ''),
+                                    'wascid': detail.get('wascid', ''),
+                                    'attack': detail.get('attack', ''),
+                                    'evidence': detail.get('evidence', ''),
+                                    'tags': detail.get('tags', {})
+                                })
+                            
+                        except Exception as detail_error:
+                            app.logger.error(f"Error fetching details for alert {alert_id}: {str(detail_error)}")
+            
+            return alerts_data
+            
+    except Exception as e:
+        app.logger.error(f"Error in simplified data fetch: {str(e)}")
+        return {'error': f'Error fetching data: {str(e)}'}
+
+
+# Alternativ 2: Direkta ZAP API-anrop med bättre felhantering
+def get_zap_alerts_data_fixed(target_url):
+    """Förbättrad version med bättre felhantering och loggning"""
+    try:
+        if not zap.is_available():
+            return {'error': 'ZAP is not available'}
+        
+        # Hämta grundläggande alerts
+        api_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/alert/view/alertsByRisk/"
+        response = requests.get(api_url, params={
+            'apikey': ZAP_API_KEY,
+            'url': target_url,
+            'recurse': 'true'
+        }, timeout=10)
+        
+        if response.status_code != 200:
+            return {'error': f'ZAP API returned status code {response.status_code}'}
+        
+        raw_data = response.json()
+        processed_data = {
+            'highAlerts': [],
+            'mediumAlerts': [],
+            'lowAlerts': [],
+            'infoAlerts': []
+        }
+        
+        # Extrahera alerts och samla IDs
+        alert_ids = []
+        if 'alertsByRisk' in raw_data:
+            for risk_group in raw_data['alertsByRisk']:
+                for risk_level in ['High', 'Medium', 'Low', 'Informational']:
+                    if risk_level in risk_group:
+                        target_list = {
+                            'High': 'highAlerts',
+                            'Medium': 'mediumAlerts', 
+                            'Low': 'lowAlerts',
+                            'Informational': 'infoAlerts'
+                        }[risk_level]
+                        
+                        for alert_type in risk_group[risk_level]:
+                            for alert_name, alerts in alert_type.items():
+                                for alert in alerts:
+                                    alert['name'] = alert_name
+                                    processed_data[target_list].append(alert)
+                                    if alert.get('id'):
+                                        alert_ids.append(alert.get('id'))
+        
+        app.logger.info(f"Extraherade {len(alert_ids)} alert IDs: {alert_ids[:5]}...")  # Visa första 5
+        
+        # Hämta detaljer för varje alert
+        details_fetched = 0
+        for alert_id in alert_ids:
+            try:
+                detail_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/alert/view/alert/"
+                detail_response = requests.get(detail_url, params={
+                    'apikey': ZAP_API_KEY,
+                    'id': str(alert_id)  # Försäkra att ID är string
+                }, timeout=5)
+                
+                if detail_response.status_code == 200:
+                    detail_json = detail_response.json()
+                    app.logger.debug(f"Detail response för {alert_id}: {list(detail_json.keys())}")
+                    
+                    if 'alert' in detail_json:
+                        detail = detail_json['alert']
+                        
+                        # Hitta och uppdatera motsvarande alert i processed_data
+                        for risk_level in processed_data:
+                            for alert in processed_data[risk_level]:
+                                if str(alert.get('id')) == str(alert_id):
+                                    alert.update({
+                                        'description': detail.get('description', ''),
+                                        'solution': detail.get('solution', ''),
+                                        'reference': detail.get('reference', ''),
+                                        'cweid': detail.get('cweid', ''),
+                                        'wascid': detail.get('wascid', ''),
+                                        'attack': detail.get('attack', ''),
+                                        'evidence': detail.get('evidence', ''),
+                                        'tags': detail.get('tags', {})
+                                    })
+                                    details_fetched += 1
+                                    app.logger.debug(f"Uppdaterade alert {alert_id} med beskrivning: {detail.get('description', 'missing')[:50]}...")
+                                    break
+                else:
+                    app.logger.warning(f"Detail API failed for {alert_id}: {detail_response.status_code}")
+                    
+            except Exception as detail_error:
+                app.logger.error(f"Error fetching details for alert {alert_id}: {str(detail_error)}")
+        
+        app.logger.info(f"Uppdaterade {details_fetched} alerts med detaljerad information")
+        
+        # Hämta summary
+        summary_url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/alert/view/alertsSummary/"
+        summary_response = requests.get(summary_url, params={
+            'apikey': ZAP_API_KEY,
+            'baseurl': target_url
+        }, timeout=10)
+        
+        summary = {}
+        if summary_response.status_code == 200:
+            raw_summary = summary_response.json()
+            if 'alertsSummary' in raw_summary:
+                summary = raw_summary['alertsSummary']
+        
+        return {
+            'alerts_by_risk': processed_data,
+            'summary': summary,
+            'debug_info': {
+                'total_alert_ids': len(alert_ids),
+                'details_fetched': details_fetched,
+                'sample_ids': alert_ids[:3]
+            }
+        }
+        
+    except Exception as e:
+        app.logger.error(f"Error in fixed data fetch: {str(e)}")
+        return {'error': f'Error fetching ZAP alerts: {str(e)}'}
+
+
 if __name__ == '__main__':
     test_zap_functionality()
     app.run(host='0.0.0.0', port=5001, debug=True)
