@@ -3918,6 +3918,71 @@ def get_zap_alerts_data_fixed(target_url):
         app.logger.error(f"Error in fixed data fetch: {str(e)}")
         return {'error': f'Error fetching ZAP alerts: {str(e)}'}
 
+@app.route('/api/download-access-control-pdf-report')
+def download_access_control_pdf_report():
+    """Generera och ladda ner PDF-rapport för Access Control test"""
+    try:
+        # Hämta test_file parameter
+        test_file = request.args.get('test_file')
+        
+        if not test_file:
+            return jsonify({'error': 'test_file parameter krävs'}), 400
+        
+        # Validera filnamn för säkerhet
+        if not test_file.endswith('.json') or '..' in test_file:
+            return jsonify({'error': 'Ogiltigt filnamn'}), 400
+        
+        # Läs testdata från fil
+        try:
+            filepath = os.path.join(access_control_manager.tests_dir, test_file)
+            if not os.path.exists(filepath):
+                return jsonify({'error': 'Testfil hittades inte'}), 404
+                
+            with open(filepath, 'r', encoding='utf-8') as f:
+                test_data = json.load(f)
+        except Exception as e:
+            return jsonify({'error': f'Kunde inte läsa testfil: {str(e)}'}), 500
+        
+        # Skapa rapport-datum
+        report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        test_date = datetime.fromtimestamp(test_data.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M:%S') if test_data.get('timestamp') else 'N/A'
+        
+        # Beräkna sammanfattningsstatistik
+        summary = {
+            'unauthorized_count': 0,
+            'redirect_count': 0,
+            'access_denied_count': 0
+        }
+        
+        if test_data.get('analysis') and test_data['analysis'].get('by_finding'):
+            summary = {
+                'unauthorized_count': test_data['analysis']['by_finding'].get('UNAUTHORIZED_ACCESS', 0),
+                'redirect_count': test_data['analysis']['by_finding'].get('REDIRECT_RESPONSE', 0),
+                'access_denied_count': test_data['analysis']['by_finding'].get('ACCESS_DENIED', 0)
+            }
+        
+        # Rendera HTML-template för PDF
+        html_content = render_template('access_control_pdf_report.html',
+            test_data=test_data,
+            report_date=report_date,
+            test_date=test_date,
+            summary=summary
+        )
+        
+        # Skapa PDF
+        pdf_file = generate_pdf_from_html(html_content)
+        
+        # Skapa response med PDF
+        response = make_response(pdf_file)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="access_control_rapport_{test_data.get("test_id", "unknown")}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Error generating Access Control PDF report: {str(e)}")
+        return jsonify({'error': f'Fel vid generering av PDF: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     test_zap_functionality()

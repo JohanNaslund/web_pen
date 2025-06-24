@@ -1,53 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Access Control Rapport{% endblock %}
+{% block title %}Access Control Testrapporter{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-md-12">
-            <h1 class="mb-4">
-                <i class="bi bi-shield-check"></i> Access Control Testrapporter
-            </h1>
-            
-            <!-- Filväljare -->
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Välj Testrapport</h4>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2>Access Control Testrapporter</h2>
+                {% if selected_test_data %}
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline-success" id="download-pdf-btn">
+                        <i class="bi bi-file-earmark-pdf"></i> Ladda ner som PDF
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="downloadAsJSON()">
+                        <i class="bi bi-file-earmark-text"></i> Ladda ner som JSON
+                    </button>
                 </div>
-                <div class="card-body">
-                    {% if test_results %}
-                        <p class="text-muted">Välj en testrapport från listan nedan för att visa detaljer:</p>
+                {% endif %}
+            </div>
+            
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h5>Välj Testrapport</h5>
+                        <p>Välj en testrapport från listan nedan för att visa detaljer:</p>
                         
-                        <div class="row">
-                            {% for test in test_results %}
-                            <div class="col-md-6 col-lg-4 mb-3">
-                                <div class="card {% if selected_test_file == test.filename %}border-primary{% endif %}">
-                                    <div class="card-body">
-                                        <h6 class="card-title">{{ test.test_description or "Access Control Test" }}</h6>
-                                        
-                                        <div class="mb-2">
-                                            <small class="text-muted">
-                                                <i class="bi bi-calendar"></i> 
-                                                {% if test.timestamp %}
-                                                    {{ datetime.fromtimestamp(test.timestamp).strftime('%Y-%m-%d %H:%M') }}
-                                                {% endif %}
-                                            </small>
+                        {% if test_results %}
+                            <div class="list-group">
+                                {% for test in test_results %}
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">{{ test.test_description or "Access Control Test" }}</h6>
+                                            <small class="text-muted">{{ datetime.fromtimestamp(test.timestamp).strftime('%Y-%m-%d %H:%M:%S') if test.timestamp else 'N/A' }}</small>
                                         </div>
                                         
-                                        <div class="mb-2">
-                                            <span class="badge bg-info">{{ test.total_tests or 0 }} tester</span>
-                                            
-                                            {# FIX: Använd rätt syntax för att hämta obehöriga åtkomster #}
+                                        <div class="ms-2">
                                             {% set unauthorized_count = test.analysis.by_finding.get('UNAUTHORIZED_ACCESS', 0) if test.analysis and test.analysis.by_finding else 0 %}
-                                            {% set redirect_count = test.analysis.by_finding.get('REDIRECT_RESPONSE', 0) if test.analysis and test.analysis.by_finding else 0 %}
-                                            {% set access_denied_count = test.analysis.by_finding.get('ACCESS_DENIED', 0) if test.analysis and test.analysis.by_finding else 0 %}
-                                            
                                             {% if unauthorized_count > 0 %}
                                                 <span class="badge bg-danger">{{ unauthorized_count }} OBEHÖRIGA</span>
-                                            {% elif redirect_count > 0 %}
-                                                <span class="badge bg-warning">{{ redirect_count }} OMDIRIGERINGAR</span>
-                                            {% elif access_denied_count > 0 %}
-                                                <span class="badge bg-success">{{ access_denied_count }} KORREKT NEKAD</span>
                                             {% else %}
                                                 <span class="badge bg-success">INGA BROTT</span>
                                             {% endif %}
@@ -67,16 +58,28 @@
                                         </a>
                                     </div>
                                 </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="text-center text-muted">
-                            <i class="bi bi-clipboard-x"></i>
-                            <p>Inga testrapporter tillgängliga. Kör ett access control test först.</p>
-                            <a href="/access-control" class="btn btn-primary">Gå till Access Control Testing</a>
-                        </div>
-                    {% endif %}
+                        {% else %}
+                            <div class="text-center text-muted">
+                                <i class="bi bi-clipboard-x"></i>
+                                <p>Inga testrapporter tillgängliga.</p>
+                                <p>Kör ett access control test först.</p>
+                                <a href="/access-control" class="btn btn-primary">Gå till Access Control Testing</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-8">
+                        {% if not selected_test_data %}
+                            <div class="text-center text-muted">
+                                <i class="bi bi-arrow-left"></i>
+                                <p>Välj en testrapport från listan till vänster för att visa detaljer.</p>
+                                <p>Kör ett access control test först.</p>
+                                <a href="/access-control" class="btn btn-primary">Gå till Access Control Testing</a>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             
@@ -151,35 +154,25 @@
                             </table>
                         </div>
                         <div class="col-md-6">
-                            <h6>Resultatfördelning</h6>
-                            <div class="card border-light">
-                                <div class="card-body p-3">
-                                    <div class="mb-2">
-                                        <span class="badge bg-danger me-2">
-                                            <i class="bi bi-unlock"></i> Obehörig åtkomst: {{ unauthorized_count }}
+                            <h6>Resultatsammanfattning</h6>
+                            <table class="table table-sm">
+                                {% if selected_test_data.analysis and selected_test_data.analysis.by_finding %}
+                                {% for finding_type, count in selected_test_data.analysis.by_finding.items() %}
+                                <tr>
+                                    <td><strong>{{ finding_type.replace('_', ' ').title() }}:</strong></td>
+                                    <td>
+                                        <span class="badge {% if finding_type == 'UNAUTHORIZED_ACCESS' %}bg-danger{% elif finding_type == 'REDIRECT_RESPONSE' %}bg-warning{% else %}bg-success{% endif %}">
+                                            {{ count }}
                                         </span>
-                                    </div>
-                                    <div class="mb-2">
-                                        <span class="badge bg-warning me-2">
-                                            <i class="bi bi-arrow-right"></i> Omdirigeringar: {{ redirect_count }}
-                                        </span>
-                                    </div>
-                                    <div class="mb-2">
-                                        <span class="badge bg-success me-2">
-                                            <i class="bi bi-shield-check"></i> Korrekt nekad: {{ access_denied_count }}
-                                        </span>
-                                    </div>
-                                    <div class="mb-2">
-                                        <span class="badge bg-secondary me-2">
-                                            <i class="bi bi-question-circle"></i> Övrigt: {{ selected_test_data.total_tests - unauthorized_count - redirect_count - access_denied_count }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% endif %}
+                            </table>
                         </div>
                     </div>
                     
-                    <!-- Obehöriga åtkomster framhävda -->
+                    <!-- Kritiska fynd -->
                     {% if unauthorized_count > 0 %}
                     <div class="alert alert-danger">
                         <h6><i class="bi bi-exclamation-triangle"></i> Obehöriga åtkomster som behöver granskas:</h6>
@@ -221,31 +214,17 @@
                                         <span class="badge bg-secondary">{{ result.method or 'GET' }}</span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-dark">{{ result.status_code or 'N/A' }}</span>
+                                        <span class="badge {% if result.status_code and result.status_code < 300 %}bg-success{% elif result.status_code and result.status_code < 400 %}bg-warning{% else %}bg-danger{% endif %}">
+                                            {{ result.status_code or 'N/A' }}
+                                        </span>
                                     </td>
                                     <td>
-                                        {% if result.finding == 'UNAUTHORIZED_ACCESS' %}
-                                            <span class="badge bg-danger">OBEHÖRIG ÅTKOMST</span>
-                                        {% elif result.finding == 'ACCESS_DENIED' %}
-                                            <span class="badge bg-success">ÅTKOMST NEKAD</span>
-                                        {% elif result.finding == 'REDIRECT_RESPONSE' %}
-                                            <span class="badge bg-warning">OMDIRIGERING</span>
-                                        {% elif result.finding == 'NOT_FOUND' %}
-                                            <span class="badge bg-secondary">EJ HITTAD</span>
-                                        {% elif result.finding == 'SERVER_ERROR' %}
-                                            <span class="badge bg-dark">SERVERFEL</span>
-                                        {% else %}
-                                            <span class="badge bg-info">{{ result.finding or 'OKÄNT' }}</span>
-                                        {% endif %}
+                                        <span class="badge {% if result.finding == 'UNAUTHORIZED_ACCESS' %}bg-danger{% elif result.finding == 'REDIRECT_RESPONSE' %}bg-warning{% elif result.finding == 'ACCESS_DENIED' %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ result.finding.replace('_', ' ').title() }}
+                                        </span>
                                     </td>
                                     <td>
-                                        <small>
-                                            {{ result.description or 'N/A' }}
-                                            {% if result.redirect_location %}
-                                                <br><strong>→ Redirect till:</strong> 
-                                                <span class="text-muted">{{ result.redirect_location }}</span>
-                                            {% endif %}
-                                        </small>
+                                        <small>{{ result.redirect_location or result.comment or '-' }}</small>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -269,13 +248,6 @@
                         </ol>
                     </div>
                     {% endif %}
-                    
-                    <!-- JSON Export -->
-                    <div class="mt-4">
-                        <button class="btn btn-outline-secondary" onclick="downloadAsJSON()">
-                            <i class="bi bi-download"></i> Ladda ner som JSON
-                        </button>
-                    </div>
                 </div>
             </div>
             {% endif %}
@@ -296,5 +268,48 @@ function downloadAsJSON() {
     link.click();
     {% endif %}
 }
+
+// PDF download functionality
+{% if selected_test_data %}
+document.addEventListener('DOMContentLoaded', function() {
+    const pdfBtn = document.getElementById('download-pdf-btn');
+    if (pdfBtn) {
+        pdfBtn.addEventListener('click', function() {
+            // Visa laddningsindikator
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar PDF...';
+            this.disabled = true;
+            
+            // Gör fetch-anrop för att hämta PDF
+            fetch('/api/download-access-control-pdf-report?test_file={{ selected_test_file }}')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    // Skapa en URL för blob och ladda ner filen
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = `access_control_rapport_{{ selected_test_data.test_id }}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error downloading PDF:', error);
+                    alert('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
+                })
+                .finally(() => {
+                    // Återställ knappen
+                    this.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Ladda ner som PDF';
+                    this.disabled = false;
+                });
+        });
+    }
+});
+{% endif %}
 </script>
 {% endblock %}
