@@ -744,6 +744,41 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initiera hämtning av sårbarheter när sidan laddas
     fetchVulnerabilities();
 });
+// Lägg till event listener för PDF-nedladdning (lägg till detta i den befintliga script-sektionen)
+document.getElementById('download-pdf-btn').addEventListener('click', function() {
+    // Visa laddningsindikator
+    this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar PDF...';
+    this.disabled = true;
+    
+    // Gör fetch-anrop för att hämta PDF
+    fetch('/api/download-pdf-report')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Skapa en URL för blob och ladda ner filen
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `sakerheterapport_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error('Error downloading PDF:', error);
+            alert('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
+        })
+        .finally(() => {
+            // Återställ knappen
+            this.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Ladda ner som PDF';
+            this.disabled = false;
+        });
+});
 </script>
 {% if debug_mode %}
 <script>
@@ -783,43 +818,6 @@ document.addEventListener('DOMContentLoaded', function() {
     console.info('Debug mode enabled');
     console.info('Target URL:', '{{ target_url }}');
     console.info('Report ID:', '{{ report_id }}');
-});
-</script>
-<script>
-// Lägg till event listener för PDF-nedladdning (lägg till detta i den befintliga script-sektionen)
-document.getElementById('download-pdf-btn').addEventListener('click', function() {
-    // Visa laddningsindikator
-    this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar PDF...';
-    this.disabled = true;
-    
-    // Gör fetch-anrop för att hämta PDF
-    fetch('/api/download-pdf-report')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.blob();
-        })
-        .then(blob => {
-            // Skapa en URL för blob och ladda ner filen
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `sakerheterapport_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-        })
-        .catch(error => {
-            console.error('Error downloading PDF:', error);
-            alert('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
-        })
-        .finally(() => {
-            // Återställ knappen
-            this.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Ladda ner som PDF';
-            this.disabled = false;
-        });
 });
 </script>
 {% endif %}
