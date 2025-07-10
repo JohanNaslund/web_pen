@@ -20,240 +20,280 @@
             </div>
             
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
+                <!-- Förbättrad testrapport-väljare som tar hela bredden -->
+                {% if test_results %}
+                    <div class="mb-4">
                         <h5>Välj Testrapport</h5>
-                        <p>Välj en testrapport från listan nedan för att visa detaljer:</p>
+                        <p class="text-muted">Klicka på en testrapport för att visa fullständiga detaljer:</p>
                         
-                        {% if test_results %}
-                            <div class="list-group">
-                                {% for test in test_results %}
-                                <div class="list-group-item">
-                                    <div class="d-flex w-100 justify-content-between">
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1">{{ test.test_description or "Access Control Test" }}</h6>
-                                            <small class="text-muted">{{ datetime.fromtimestamp(test.timestamp).strftime('%Y-%m-%d %H:%M:%S') if test.timestamp else 'N/A' }}</small>
+                        <!-- Förbättrade testkort som tar hela bredden -->
+                        <div class="row">
+                            {% for test in test_results %}
+                            {% set unauthorized_count = test.analysis.by_finding.get('UNAUTHORIZED_ACCESS', 0) if test.analysis and test.analysis.by_finding else 0 %}
+                            {% set redirect_count = test.analysis.by_finding.get('REDIRECT_RESPONSE', 0) if test.analysis and test.analysis.by_finding else 0 %}
+                            
+                            <div class="col-lg-6 col-xl-4 mb-3">
+                                <div class="card h-100 {% if selected_test_file == test.filename %}border-primary{% endif %} test-report-card">
+                                    <div class="card-body">
+                                        <!-- Titel och datum -->
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 class="card-title mb-1 flex-grow-1">
+                                                {{ test.test_description or "Access Control Test" }}
+                                            </h6>
+                                            {% if unauthorized_count > 0 %}
+                                                <span class="badge bg-danger ms-2">🚨</span>
+                                            {% elif redirect_count > 0 %}
+                                                <span class="badge bg-warning ms-2">⚠️</span>
+                                            {% else %}
+                                                <span class="badge bg-success ms-2">✅</span>
+                                            {% endif %}
                                         </div>
                                         
-                                        <div class="ms-2">
-                                            {% set unauthorized_count = test.analysis.by_finding.get('UNAUTHORIZED_ACCESS', 0) if test.analysis and test.analysis.by_finding else 0 %}
+                                        <!-- Datum och tid -->
+                                        <small class="text-muted d-block mb-3">
+                                            <i class="bi bi-calendar3"></i> 
+                                            {{ datetime.fromtimestamp(test.timestamp).strftime('%Y-%m-%d %H:%M:%S') if test.timestamp else 'N/A' }}
+                                        </small>
+                                        
+                                        <!-- Status-badges -->
+                                        <div class="mb-3">
                                             {% if unauthorized_count > 0 %}
-                                                <span class="badge bg-danger">{{ unauthorized_count }} OBEHÖRIGA</span>
-                                            {% else %}
+                                                <span class="badge bg-danger me-1">{{ unauthorized_count }} OBEHÖRIGA</span>
+                                            {% endif %}
+                                            {% if redirect_count > 0 %}
+                                                <span class="badge bg-warning me-1">{{ redirect_count }} OMDIRIGERINGAR</span>
+                                            {% endif %}
+                                            {% if unauthorized_count == 0 and redirect_count == 0 %}
                                                 <span class="badge bg-success">INGA BROTT</span>
                                             {% endif %}
                                         </div>
                                         
-                                        <div class="mb-2">
-                                            <small>
-                                                <strong>URLs från:</strong> {{ test.urls_session or 'N/A' }}<br>
-                                                <strong>Credentials från:</strong> {{ test.credentials_session or 'N/A' }}
-                                            </small>
+                                        <!-- Session-info kompakt -->
+                                        <div class="small text-muted mb-3">
+                                            <div><strong>URLs från:</strong> {{ test.urls_session or 'N/A' }}</div>
+                                            <div><strong>Credentials:</strong> {{ test.credentials_session or 'N/A' }}</div>
+                                            <div><strong>Testade URLs:</strong> {{ test.total_tests or 0 }}</div>
                                         </div>
                                         
+                                        <!-- Visa-knapp som tar hela bredden -->
                                         <a href="/access-control-report?test_file={{ test.filename }}" 
-                                           class="btn btn-sm {% if selected_test_file == test.filename %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                                           class="btn {% if selected_test_file == test.filename %}btn-primary{% else %}btn-outline-primary{% endif %} w-100">
                                             <i class="bi bi-eye{% if selected_test_file == test.filename %}-fill{% endif %}"></i> 
-                                            {% if selected_test_file == test.filename %}Visas{% else %}Visa{% endif %}
+                                            {% if selected_test_file == test.filename %}Visas nu{% else %}Visa rapport{% endif %}
                                         </a>
                                     </div>
                                 </div>
-                                {% endfor %}
                             </div>
-                        {% else %}
-                            <div class="text-center text-muted">
-                                <i class="bi bi-clipboard-x"></i>
-                                <p>Inga testrapporter tillgängliga.</p>
-                                <p>Kör ett access control test först.</p>
-                                <a href="/access-control" class="btn btn-primary">Gå till Access Control Testing</a>
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="col-md-8">
-                        {% if not selected_test_data %}
-                            <div class="text-center text-muted">
-                                <i class="bi bi-arrow-left"></i>
-                                <p>Välj en testrapport från listan till vänster för att visa detaljer.</p>
-                                <p>Kör ett access control test först.</p>
-                                <a href="/access-control" class="btn btn-primary">Gå till Access Control Testing</a>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Detaljerad rapportvisning -->
-            {% if selected_test_data %}
-            <div class="card mb-4">
-                {% set unauthorized_count = selected_test_data.analysis.by_finding.get('UNAUTHORIZED_ACCESS', 0) if selected_test_data.analysis and selected_test_data.analysis.by_finding else 0 %}
-                {% set redirect_count = selected_test_data.analysis.by_finding.get('REDIRECT_RESPONSE', 0) if selected_test_data.analysis and selected_test_data.analysis.by_finding else 0 %}
-                {% set access_denied_count = selected_test_data.analysis.by_finding.get('ACCESS_DENIED', 0) if selected_test_data.analysis and selected_test_data.analysis.by_finding else 0 %}
-                
-                <div class="card-header {% if unauthorized_count > 0 %}bg-danger{% elif redirect_count > 0 %}bg-warning{% else %}bg-success{% endif %} text-white">
-                    <h4 class="mb-0">
-                        <i class="bi bi-file-text"></i> 
-                        {{ selected_test_data.test_description or "Access Control Test" }}
-                    </h4>
-                </div>
-                <div class="card-body">
-                    
-                    <!-- Huvudstatistik framhävd -->
-                    
-                    {% if unauthorized_count > 0 %}
-                    <div class="alert alert-danger">
-                        <h5 class="mb-2">
-                            <i class="bi bi-shield-exclamation"></i> 
-                            <strong>{{ unauthorized_count }} Obehöriga åtkomster upptäckta!</strong>
-                        </h5>
-                        <p class="mb-0">Dessa kräver omedelbar säkerhetsbedömning av din säkerhetsspecialist.</p>
-                    </div>
-                    {% elif redirect_count > 0 %}
-                    <div class="alert alert-warning">
-                        <h5 class="mb-2">
-                            <i class="bi bi-arrow-repeat"></i> 
-                            <strong>{{ redirect_count }} Omdirigeringar upptäckta</strong>
-                        </h5>
-                        <p class="mb-0">Kontrollera att omdirigeringarna går till rätt destination.</p>
-                    </div>
-                    {% else %}
-                    <div class="alert alert-success">
-                        <h5 class="mb-2">
-                            <i class="bi bi-shield-check"></i> 
-                            <strong>Inga kritiska problem upptäckta</strong>
-                        </h5>
-                        <p class="mb-0">Access control verkar fungera korrekt.</p>
-                    </div>
-                    {% endif %}
-                    
-                    <!-- Rapportsammanfattning -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <h6>Testinformation</h6>
-                            <table class="table table-sm">
-                                <tr>
-                                    <td><strong>Test ID:</strong></td>
-                                    <td>{{ selected_test_data.test_id }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Datum:</strong></td>
-                                    <td>{{ datetime.fromtimestamp(selected_test_data.timestamp).strftime('%Y-%m-%d %H:%M:%S') if selected_test_data.timestamp else 'N/A' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>URLs från session:</strong></td>
-                                    <td>{{ selected_test_data.urls_session }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Credentials från session:</strong></td>
-                                    <td>{{ selected_test_data.credentials_session }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Totalt testade URLs:</strong></td>
-                                    <td>{{ selected_test_data.total_tests }}</td>
-                                </tr>
-                            </table>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>Resultatsammanfattning</h6>
-                            <table class="table table-sm">
-                                {% if selected_test_data.analysis and selected_test_data.analysis.by_finding %}
-                                {% for finding_type, count in selected_test_data.analysis.by_finding.items() %}
-                                <tr>
-                                    <td><strong>{{ finding_type.replace('_', ' ').title() }}:</strong></td>
-                                    <td>
-                                        <span class="badge {% if finding_type == 'UNAUTHORIZED_ACCESS' %}bg-danger{% elif finding_type == 'REDIRECT_RESPONSE' %}bg-warning{% else %}bg-success{% endif %}">
-                                            {{ count }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                                {% endif %}
-                            </table>
-                        </div>
-                    </div>
-                    
-                    <!-- Kritiska fynd -->
-                    {% if unauthorized_count > 0 %}
-                    <div class="alert alert-danger">
-                        <h6><i class="bi bi-exclamation-triangle"></i> Obehöriga åtkomster som behöver granskas:</h6>
-                        <ul class="mb-0">
-                            {% for result in selected_test_data.test_results %}
-                                {% if result.finding == 'UNAUTHORIZED_ACCESS' %}
-                                <li>
-                                    <strong>{{ result.method or 'GET' }}</strong> {{ result.url }} 
-                                    <span class="badge bg-dark">HTTP {{ result.status_code }}</span>
-                                </li>
-                                {% endif %}
                             {% endfor %}
-                        </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Separator när ingen rapport är vald -->
+                    {% if not selected_test_data %}
+                    <div class="text-center text-muted my-5">
+                        <i class="bi bi-arrow-up-circle" style="font-size: 2rem;"></i>
+                        <p class="mt-2">Välj en testrapport ovan för att visa fullständiga detaljer</p>
                     </div>
                     {% endif %}
-                    
-                    <!-- Detaljerade testresultat -->
-                    <h6>Alla Testresultat</h6>
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>URL</th>
-                                    <th>Metod</th>
-                                    <th>Status</th>
-                                    <th>Resultat</th>
-                                    <th>Kommentar/Redirect</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for result in selected_test_data.test_results %}
-                                <tr class="{% if result.finding == 'UNAUTHORIZED_ACCESS' %}table-danger{% elif result.finding == 'REDIRECT_RESPONSE' %}table-warning{% elif result.finding == 'ACCESS_DENIED' %}table-success{% else %}table-light{% endif %}">
-                                    <td>
-                                        <small class="text-truncate d-inline-block" style="max-width: 300px;" title="{{ result.url }}">
-                                            {{ result.url }}
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-secondary">{{ result.method or 'GET' }}</span>
-                                    </td>
-                                    <td>
-                                        <span class="badge {% if result.status_code and result.status_code < 300 %}bg-success{% elif result.status_code and result.status_code < 400 %}bg-warning{% else %}bg-danger{% endif %}">
-                                            {{ result.status_code or 'N/A' }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="badge {% if result.finding == 'UNAUTHORIZED_ACCESS' %}bg-danger{% elif result.finding == 'REDIRECT_RESPONSE' %}bg-warning{% elif result.finding == 'ACCESS_DENIED' %}bg-success{% else %}bg-secondary{% endif %}">
-                                            {{ result.finding.replace('_', ' ').title() }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <small>{{ result.redirect_location or result.comment or '-' }}</small>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
+                {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-clipboard-x" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3">Inga testrapporter tillgängliga</h5>
+                        <p>Kör ett access control test först för att se rapporter här.</p>
+                        <a href="/access-control" class="btn btn-primary">
+                            <i class="bi bi-shield-check"></i> Gå till Access Control Testing
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Detaljerad rapportvisning - nu tar hela bredden -->
+        {% if selected_test_data %}
+        <div class="card mt-4">
+            {% set unauthorized_count = selected_test_data.analysis.by_finding.get('UNAUTHORIZED_ACCESS', 0) if selected_test_data.analysis and selected_test_data.analysis.by_finding else 0 %}
+            {% set redirect_count = selected_test_data.analysis.by_finding.get('REDIRECT_RESPONSE', 0) if selected_test_data.analysis and selected_test_data.analysis.by_finding else 0 %}
+            {% set access_denied_count = selected_test_data.analysis.by_finding.get('ACCESS_DENIED', 0) if selected_test_data.analysis and selected_test_data.analysis.by_finding else 0 %}
+            
+            <div class="card-header {% if unauthorized_count > 0 %}bg-danger{% elif redirect_count > 0 %}bg-warning{% else %}bg-success{% endif %} text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-file-text"></i> 
+                    {{ selected_test_data.test_description or "Access Control Test" }}
+                </h4>
+            </div>
+            <div class="card-body">
+                
+                <!-- Huvudstatistik framhävd -->
+                {% if unauthorized_count > 0 %}
+                <div class="alert alert-danger">
+                    <h5 class="mb-2">
+                        <i class="bi bi-shield-exclamation"></i> 
+                        <strong>{{ unauthorized_count }} Obehöriga åtkomster upptäckta!</strong>
+                    </h5>
+                    <p class="mb-0">Dessa kräver omedelbar säkerhetsbedömning av din säkerhetsspecialist.</p>
+                </div>
+                {% elif redirect_count > 0 %}
+                <div class="alert alert-warning">
+                    <h5 class="mb-2">
+                        <i class="bi bi-arrow-repeat"></i> 
+                        <strong>{{ redirect_count }} Omdirigeringar upptäckta</strong>
+                    </h5>
+                    <p class="mb-0">Kontrollera att omdirigeringarna går till rätt destination.</p>
+                </div>
+                {% else %}
+                <div class="alert alert-success">
+                    <h5 class="mb-2">
+                        <i class="bi bi-shield-check"></i> 
+                        <strong>Inga kritiska problem upptäckta</strong>
+                    </h5>
+                    <p class="mb-0">Access control verkar fungera korrekt.</p>
+                </div>
+                {% endif %}
+                
+                <!-- Rapportsammanfattning i förbättrad layout -->
+                <div class="row mb-4">
+                    <div class="col-lg-6">
+                        <h6>Testinformation</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Test ID:</strong></td>
+                                <td>{{ selected_test_data.test_id }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Datum:</strong></td>
+                                <td>{{ datetime.fromtimestamp(selected_test_data.timestamp).strftime('%Y-%m-%d %H:%M:%S') if selected_test_data.timestamp else 'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>URLs från session:</strong></td>
+                                <td>{{ selected_test_data.urls_session }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Credentials från session:</strong></td>
+                                <td>{{ selected_test_data.credentials_session }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Totalt testade URLs:</strong></td>
+                                <td>{{ selected_test_data.total_tests }}</td>
+                            </tr>
                         </table>
                     </div>
-                    
-                    <!-- Actionable sammanfattning -->
-                    {% if unauthorized_count > 0 or redirect_count > 0 %}
-                    <div class="alert alert-info mt-4">
-                        <h6><i class="bi bi-info-circle"></i> Nästa steg för säkerhetsteamet:</h6>
-                        <ol class="mb-0">
-                            {% if unauthorized_count > 0 %}
-                            <li><strong>Granska de {{ unauthorized_count }} obehöriga åtkomsterna</strong> - avgör vilka som är säkerhetsproblem</li>
+                    <div class="col-lg-6">
+                        <h6>Resultatsammanfattning</h6>
+                        <table class="table table-sm">
+                            {% if selected_test_data.analysis and selected_test_data.analysis.by_finding %}
+                            {% for finding_type, count in selected_test_data.analysis.by_finding.items() %}
+                            <tr>
+                                <td><strong>{{ finding_type.replace('_', ' ').title() }}:</strong></td>
+                                <td>
+                                    <span class="badge {% if finding_type == 'UNAUTHORIZED_ACCESS' %}bg-danger{% elif finding_type == 'REDIRECT_RESPONSE' %}bg-warning{% else %}bg-success{% endif %}">
+                                        {{ count }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
                             {% endif %}
-                            {% if redirect_count > 0 %}
-                            <li><strong>Kontrollera omdirigeringarna</strong> - se vart användaren faktiskt omdirigeras</li>
-                            {% endif %}
-                            <li><strong>Bedöm affärspåverkan</strong> - vilken data/funktionalitet exponeras?</li>
-                            <li><strong>Prioritera åtgärder</strong> baserat på innehållskänslighet</li>
-                        </ol>
+                        </table>
                     </div>
-                    {% endif %}
                 </div>
+                
+                <!-- Kritiska fynd -->
+                {% if unauthorized_count > 0 %}
+                <div class="alert alert-danger">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Obehöriga åtkomster som behöver granskas:</h6>
+                    <ul class="mb-0">
+                        {% for result in selected_test_data.test_results %}
+                            {% if result.finding == 'UNAUTHORIZED_ACCESS' %}
+                            <li>
+                                <strong>{{ result.method or 'GET' }}</strong> {{ result.url }} 
+                                <span class="badge bg-dark">HTTP {{ result.status_code }}</span>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                <!-- Detaljerade testresultat -->
+                <h6>Alla Testresultat</h6>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 45%;">URL</th>
+                                <th style="width: 8%;">Metod</th>
+                                <th style="width: 10%;">Status</th>
+                                <th style="width: 15%;">Resultat</th>
+                                <th style="width: 22%;">Kommentar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in selected_test_data.test_results %}
+                            <tr class="{% if result.finding == 'UNAUTHORIZED_ACCESS' %}table-danger{% elif result.finding == 'REDIRECT_RESPONSE' %}table-warning{% elif result.finding == 'ACCESS_DENIED' %}table-success{% endif %}">
+                                <td class="small text-break">{{ result.url }}</td>
+                                <td><span class="badge bg-secondary">{{ result.method or 'GET' }}</span></td>
+                                <td>
+                                    <span class="badge {% if result.status_code and result.status_code < 300 %}bg-success{% elif result.status_code and result.status_code < 400 %}bg-warning{% else %}bg-danger{% endif %}">
+                                        {{ result.status_code or 'N/A' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {% if result.finding == 'UNAUTHORIZED_ACCESS' %}bg-danger{% elif result.finding == 'REDIRECT_RESPONSE' %}bg-warning{% elif result.finding == 'ACCESS_DENIED' %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ result.finding.replace('_', ' ').title() }}
+                                    </span>
+                                </td>
+                                <td class="small">{{ result.redirect_location or result.comment or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Actionable sammanfattning -->
+                {% if unauthorized_count > 0 or redirect_count > 0 %}
+                <div class="alert alert-info mt-4">
+                    <h6><i class="bi bi-info-circle"></i> Nästa steg för säkerhetsteamet:</h6>
+                    <ol class="mb-0">
+                        {% if unauthorized_count > 0 %}
+                        <li><strong>Granska de {{ unauthorized_count }} obehöriga åtkomsterna</strong> - avgör vilka som är säkerhetsproblem</li>
+                        {% endif %}
+                        {% if redirect_count > 0 %}
+                        <li><strong>Kontrollera omdirigeringarna</strong> - se vart användaren faktiskt omdirigeras</li>
+                        {% endif %}
+                        <li><strong>Bedöm affärspåverkan</strong> - vilken data/funktionalitet exponeras?</li>
+                        <li><strong>Prioritera åtgärder</strong> baserat på innehållskänslighet</li>
+                    </ol>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
+        {% endif %}
     </div>
 </div>
+
+<style>
+.test-report-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.test-report-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.test-report-card.border-primary {
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+}
+
+.text-break {
+    word-break: break-all;
+}
+
+.table-responsive {
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+</style>
 
 <script>
 function downloadAsJSON() {
@@ -288,19 +328,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     return response.blob();
                 })
                 .then(blob => {
-                    // Skapa en URL för blob och ladda ner filen
+                    // Skapa download-länk
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
-                    a.download = `access_control_rapport_{{ selected_test_data.test_id }}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
+                    a.download = 'access_control_rapport_{{ selected_test_data.test_id }}.pdf';
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                 })
                 .catch(error => {
                     console.error('Error downloading PDF:', error);
-                    alert('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
+                    alert('Fel vid nedladdning av PDF: ' + error.message);
                 })
                 .finally(() => {
                     // Återställ knappen
@@ -312,4 +352,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 {% endif %}
 </script>
+
 {% endblock %}

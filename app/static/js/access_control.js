@@ -408,6 +408,9 @@ document.addEventListener('DOMContentLoaded', function() {
     /**
      * Visa testresultat
      */
+    /**
+     * Visa testresultat - uppdaterad för att matcha rapporten
+     */
     function displayTestResults(results) {
         if (results.length === 0) {
             testResults.innerHTML = `
@@ -421,13 +424,38 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let html = '';
         results.forEach(result => {
-            const riskClass = getRiskBadgeClass(result.risk_level);
+            // Beräkna rätt antal problem från analysis
+            const unauthorizedCount = result.analysis && result.analysis.by_finding ? 
+                result.analysis.by_finding['UNAUTHORIZED_ACCESS'] || 0 : 0;
+            const redirectCount = result.analysis && result.analysis.by_finding ? 
+                result.analysis.by_finding['REDIRECT_RESPONSE'] || 0 : 0;
+            const accessDeniedCount = result.analysis && result.analysis.by_finding ? 
+                result.analysis.by_finding['ACCESS_DENIED'] || 0 : 0;
+            
+            // Bestäm status baserat på unauthorized count
+            let statusClass, statusText, statusIcon;
+            if (unauthorizedCount > 0) {
+                statusClass = 'bg-danger';
+                statusText = 'KRÄVER GRANSKNING';
+                statusIcon = 'bi-shield-exclamation';
+            } else if (redirectCount > 0) {
+                statusClass = 'bg-warning';
+                statusText = 'KONTROLLERA OMDIRIGERINGAR';
+                statusIcon = 'bi-arrow-repeat';
+            } else {
+                statusClass = 'bg-success';
+                statusText = 'PASSED';
+                statusIcon = 'bi-shield-check';
+            }
+            
             html += `
                 <div class="card mb-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">${escapeHtml(result.test_description || 'Access Control Test')}</h6>
                         <div>
-                            <span class="badge ${riskClass}">${result.risk_level}</span>
+                            <span class="badge ${statusClass}">
+                                <i class="${statusIcon}"></i> ${statusText}
+                            </span>
                             <small class="text-muted ms-2">${formatDate(result.timestamp)}</small>
                         </div>
                     </div>
@@ -435,28 +463,53 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="row">
                             <div class="col-md-6">
                                 <p><strong>URL:er testade:</strong> ${result.total_tests}</p>
-                                <p><strong>Potentiella problem:</strong> ${result.potential_issues}</p>
+                                ${unauthorizedCount > 0 ? 
+                                    `<p><strong style="color: #dc3545;">🚨 Obehöriga åtkomster:</strong> <span class="badge bg-danger">${unauthorizedCount}</span></p>` :
+                                    `<p><strong style="color: #28a745;">✅ Inga access control-problem upptäckta</strong></p>`
+                                }
                             </div>
                             <div class="col-md-6">
-                                <p><strong>URL-session:</strong> ${escapeHtml(result.url_session)}</p>
-                                <p><strong>Credentials-session:</strong> ${escapeHtml(result.credentials_session)}</p>
+                                <p><strong>URL-session:</strong> ${escapeHtml(result.urls_session || result.url_session || 'N/A')}</p>
+                                <p><strong>Credentials-session:</strong> ${escapeHtml(result.credentials_session || 'N/A')}</p>
                             </div>
                         </div>
                         
-                        ${result.issues && result.issues.length > 0 ? `
-                            <h6 class="mt-3">Upptäckta problem:</h6>
-                            <ul class="list-group list-group-flush">
-                                ${result.issues.map(issue => `
-                                    <li class="list-group-item d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <strong>${escapeHtml(issue.url)}</strong>
-                                            <br><small class="text-muted">${escapeHtml(issue.description)}</small>
-                                        </div>
-                                        <span class="badge ${getRiskBadgeClass(issue.severity)}">${issue.severity}</span>
-                                    </li>
-                                `).join('')}
-                            </ul>
-                        ` : '<p class="text-success">Inga access control-problem upptäckta ✅</p>'}
+                        <!-- Visa detaljerad analys -->
+                        ${result.analysis && result.analysis.by_finding ? `
+                            <div class="mt-3">
+                                <h6>Detaljerad analys:</h6>
+                                <div class="row">
+                                    ${Object.entries(result.analysis.by_finding).map(([finding, count]) => {
+                                        let badgeClass = 'bg-secondary';
+                                        let displayText = finding.replace(/_/g, ' ').toLowerCase();
+                                        
+                                        if (finding === 'UNAUTHORIZED_ACCESS') {
+                                            badgeClass = 'bg-danger';
+                                            displayText = 'obehöriga åtkomster';
+                                        } else if (finding === 'REDIRECT_RESPONSE') {
+                                            badgeClass = 'bg-warning';
+                                            displayText = 'omdirigeringar';
+                                        } else if (finding === 'ACCESS_DENIED') {
+                                            badgeClass = 'bg-success';
+                                            displayText = 'åtkomst nekad (korrekt)';
+                                        }
+                                        
+                                        return `
+                                            <div class="col-auto mb-2">
+                                                <span class="badge ${badgeClass}">${count} ${displayText}</span>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="mt-3">
+                            <a href="/access-control-report?test_file=test_report_${result.test_id}.json" 
+                            class="btn btn-primary btn-sm">
+                                <i class="bi bi-file-text"></i> Visa fullständig rapport
+                            </a>
+                        </div>
                     </div>
                 </div>
             `;

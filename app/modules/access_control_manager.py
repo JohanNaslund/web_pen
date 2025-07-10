@@ -1079,30 +1079,49 @@ class AccessControlManager:
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 test_data = json.load(f)
                             
-                            # Skapa sammanfattning för visning - INKLUDERA ANALYSIS!
+                            # Skapa sammanfattning för visning - INKLUDERA FULLSTÄNDIG ANALYSIS!
                             summary = {
                                 'test_id': test_data.get('test_id', 'unknown'),
                                 'test_description': test_data.get('test_description', ''),
                                 'timestamp': test_data.get('timestamp', 0),
-                                'urls_session': test_data.get('urls_session', 'unknown'),  # Ändrat från url_session
+                                'urls_session': test_data.get('urls_session', 'unknown'),
                                 'credentials_session': test_data.get('credentials_session', 'unknown'),
                                 'total_tests': test_data.get('total_tests', 0),
                                 'risk_level': test_data.get('risk_level', 'UNKNOWN'),
-                                'potential_issues': test_data.get('potential_issues', 0),
-                                'analysis': test_data.get('analysis', {}),  # LÄGG TILL DENNA RAD!
-                                'filename': filename,  # Lägg till filename också
-                                'issues': []
+                                'analysis': test_data.get('analysis', {}),  # FULLSTÄNDIG ANALYSIS DATA
+                                'filename': filename,
+                                
+                                # Beräkna problem baserat på analysis.by_finding (som rapporten)
+                                'unauthorized_count': 0,
+                                'redirect_count': 0,
+                                'access_denied_count': 0,
+                                'potential_issues': 0  # Behåll för bakåtkompatibilitet
                             }
                             
-                            # Extrahera specifika problem för visning (om det behövs)
+                            # Hämta counts från analysis.by_finding om tillgängligt
+                            if test_data.get('analysis') and test_data['analysis'].get('by_finding'):
+                                by_finding = test_data['analysis']['by_finding']
+                                summary['unauthorized_count'] = by_finding.get('UNAUTHORIZED_ACCESS', 0)
+                                summary['redirect_count'] = by_finding.get('REDIRECT_RESPONSE', 0)
+                                summary['access_denied_count'] = by_finding.get('ACCESS_DENIED', 0)
+                                
+                                # Sätt potential_issues = unauthorized_count för konsistens
+                                summary['potential_issues'] = summary['unauthorized_count']
+                            else:
+                                # Fallback till gamla potential_issues om analysis saknas
+                                summary['potential_issues'] = test_data.get('potential_issues', 0)
+                            
+                            # Extrahera specifika problem för visning
+                            summary['issues'] = []
                             test_results = test_data.get('test_results', [])
                             for result in test_results:
-                                if result.get('risk_level') in ['HIGH', 'CRITICAL']:
+                                if result.get('finding') == 'UNAUTHORIZED_ACCESS':
                                     summary['issues'].append({
                                         'url': result.get('url', ''),
                                         'description': result.get('description', ''),
-                                        'severity': result.get('risk_level', 'UNKNOWN'),
-                                        'finding': result.get('finding', '')
+                                        'severity': 'UNAUTHORIZED_ACCESS',
+                                        'finding': result.get('finding', ''),
+                                        'status_code': result.get('status_code', '')
                                     })
                             
                             results.append(summary)
@@ -1119,7 +1138,7 @@ class AccessControlManager:
         except Exception as e:
             print(f"[AccessControl] Error getting test results: {e}")
             return []
-
+        
     def _perform_access_control_test(self, url, method, test_cookies, original_cookies, category='other'):
         """Genomför en enskild access control test"""
         try:
