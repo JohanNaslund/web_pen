@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Säkerhetsrapport - Basic</title>
+</head>
+<body>
+    <!-- Rapportsidhuvud -->
+    <div class="header">
+        <h1>Säkerhetsrapport</h1>
+    </div>
+    
+    <div class="report-info">
+        <p><strong>Målwebbplats:</strong> {{ target_url }}</p>
+        <p><strong>Rapport-ID:</strong> {{ report_id }}</p>
+        <p><strong>Genererad:</strong> {{ report_date }}</p>
+    </div>
+
+    <!-- Sammanfattning -->
+    <div class="summary-section">
+        <h2>Sammanfattning av säkerhetsanalys</h2>
+        <div class="summary-grid">
+            <div class="summary-card high-risk">
+                <h3>{{ risk_counts.high }}</h3>
+                <p>Hög risk</p>
+            </div>
+            <div class="summary-card medium-risk">
+                <h3>{{ risk_counts.medium }}</h3>
+                <p>Medelhög risk</p>
+            </div>
+            <div class="summary-card low-risk">
+                <h3>{{ risk_counts.low }}</h3>
+                <p>Låg risk</p>
+            </div>
+            <div class="summary-card info-risk">
+                <h3>{{ risk_counts.info }}</h3>
+                <p>Informativ</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Översikt av identifierade sårbarheter -->
+    <div class="findings-overview">
+        <h2>Identifierade säkerhetsproblem</h2>
+        <ul class="findings-list">
+            {% for risk_level in ['high', 'medium', 'low', 'info'] %}
+                {% if organized_data[risk_level] %}
+                    {% for vuln_name, vuln_data in organized_data[risk_level].items() %}
+                    <li>
+                        <span class="finding-name">
+                            <span class="risk-badge {{ risk_level }}">{{ vuln_data.risk.upper() }}</span>
+                            {{ vuln_name }}
+                        </span>
+                        <span class="finding-count">{{ vuln_data.instances|length }}</span>
+                    </li>
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+
+    <!-- Slutsats -->
+    <div class="conclusion">
+        <h2>Rekommendationer</h2>
+        {% if risk_counts.high > 0 %}
+            <p>Webbplatsen har <strong>{{ risk_counts.high }} sårbarheter av hög risk</strong> som kräver omedelbar uppmärksamhet.</p>
+        {% endif %}
+        {% if risk_counts.medium > 0 %}
+            <p>Det finns <strong>{{ risk_counts.medium }} sårbarheter av medelhög risk</strong> som bör åtgärdas.</p>
+        {% endif %}
+        {% if risk_counts.low > 0 %}
+            <p>{{ risk_counts.low }} sårbarheter av låg risk har identifierats för framtida förbättringar.</p>
+        {% endif %}
+        {% if risk_counts.high == 0 and risk_counts.medium == 0 and risk_counts.low == 0 %}
+            <p>Gratulerar! Inga allvarliga säkerhetsproblem identifierades under scanningen.</p>
+        {% else %}
+            <p>Kontakta ert säkerhetsteam för detaljerad vägledning om åtgärder.</p>
+        {% endif %}
+    </div>
+
+    <div class="footer">
+        <p>Denna rapport genererades automatiskt av säkerhetsscanningssystemet.</p>
+    </div>
+
+</body>
+</html>

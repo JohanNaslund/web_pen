@@ -27,6 +27,7 @@ from weasyprint.text.fonts import FontConfiguration
 import tempfile
 from flask import make_response
 
+
 active_recordings = {}
 
 #from modules.sql_injection_tester import SQLInjectionTester
@@ -121,6 +122,7 @@ session_manager = SessionManager(storage_path='./data/sessions')
 '''report_generator = ReportGenerator(storage_path='./data/reports')'''
 
 access_control_manager = AccessControlManager(zap)
+
 
 
 @app.route('/access-control')
@@ -3141,6 +3143,504 @@ def api_access_control_recording_status():
             'is_recording': False
         }), 500
 
+
+# Lägg till dessa routes i din app.py fil
+
+@app.route('/api/download-pdf-report')
+@app.route('/api/download-pdf-report/<report_type>')
+def download_pdf_report(report_type='full'):
+    """Generera och ladda ner PDF-rapport i olika format"""
+    try:
+        target_url = session.get('target_url', '')
+        
+        if not target_url:
+            return jsonify({'error': 'Vänligen konfigurera ett mål först.'}), 400
+        
+        # Validera rapporttyp
+        valid_types = ['basic', 'medium', 'full']
+        if report_type not in valid_types:
+            report_type = 'full'
+        
+        # Hämta sårbarhetsdata
+        alerts_data = get_zap_alerts_data(target_url)
+        
+        if 'error' in alerts_data:
+            return jsonify({'error': f'Fel vid hämtning av data: {alerts_data["error"]}'}), 500
+        
+        # Organisera data
+        alerts_by_risk = alerts_data.get('alerts_by_risk', {})
+        organized_data = organize_alerts_by_type_and_risk(alerts_by_risk)
+        
+        # Räkna sårbarheter
+        risk_counts = {
+            'high': len(alerts_by_risk.get('highAlerts', [])),
+            'medium': len(alerts_by_risk.get('mediumAlerts', [])),
+            'low': len(alerts_by_risk.get('lowAlerts', [])),
+            'info': len(alerts_by_risk.get('infoAlerts', []))
+        }
+        
+        # Välj rätt template baserat på rapporttyp
+        template_mapping = {
+            'basic': 'basic_pdf_report.html',
+            'medium': 'medium_pdf_report.html',
+            'full': 'full_pdf_report_improved.html'
+        }
+        
+        template_name = template_mapping[report_type]
+        
+        # Generera rapport-ID
+        report_id = str(uuid.uuid4())
+        
+        # Rendera HTML
+        html_content = render_template(template_name,
+            target_url=target_url,
+            report_id=report_id,
+            report_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            risk_counts=risk_counts,
+            organized_data=organized_data
+        )
+        
+        # Generera PDF med CSS för den specifika rapporttypen
+        pdf_bytes = generate_pdf_from_html_with_type(html_content, report_type)
+        
+        # Skapa svar
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=sakerheterapport_{report_type}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Error generating {report_type} PDF report: {str(e)}")
+        return jsonify({'error': f'Kunde inte generera rapport: {str(e)}'}), 500
+
+
+def generate_pdf_from_html_with_type(html_content, report_type):
+    """Generera PDF med CSS anpassad för rapporttyp"""
+    try:
+        # Bas CSS som gäller för alla rapporter
+        base_css = """
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+        
+        .report-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .report-info p {
+            margin: 3px 0;
+            font-size: 10pt;
+        }
+        
+        .summary-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            flex: 1;
+            text-align: center;
+            padding: 20px 15px;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .summary-card.high-risk { background: linear-gradient(135deg, #dc3545, #c82333); }
+        .summary-card.medium-risk { background: linear-gradient(135deg, #ffc107, #e0a800); color: #212529; }
+        .summary-card.low-risk { background: linear-gradient(135deg, #17a2b8, #138496); }
+        .summary-card.info-risk { background: linear-gradient(135deg, #6c757d, #5a6268); }
+        
+        .summary-card h3 {
+            margin: 0 0 8px 0;
+            font-weight: bold;
+        }
+        
+        .summary-card p {
+            margin: 0;
+            font-weight: 500;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+            color: white;
+            margin-right: 8px;
+        }
+        
+        .risk-badge.high { background-color: #dc3545; }
+        .risk-badge.medium { background-color: #ffc107; color: #212529; }
+        .risk-badge.low { background-color: #17a2b8; }
+        .risk-badge.info { background-color: #6c757d; }
+        
+        .confidence-badge {
+            display: inline-block;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+        
+        .confidence-high { background-color: #d4edda; color: #155724; }
+        .confidence-medium { background-color: #fff3cd; color: #856404; }
+        .confidence-low { background-color: #f8d7da; color: #721c24; }
+        
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 9pt;
+            color: #666;
+            border-top: 1px solid #dee2e6;
+            padding-top: 15px;
+        }
+        """
+        
+        # Specifik CSS för varje rapporttyp
+        type_specific_css = {
+            'basic': """
+                @page {
+                    size: A4;
+                    margin: 2cm;
+                    @top-center {
+                        content: "Säkerhetsrapport - Basic";
+                        font-size: 10pt;
+                        color: #666;
+                    }
+                    @bottom-center {
+                        content: counter(page) " av " counter(pages);
+                        font-size: 10pt;
+                        color: #666;
+                    }
+                }
+                
+                body { font-size: 12pt; line-height: 1.5; }
+                .header h1 { font-size: 28pt; }
+                .summary-card h3 { font-size: 48pt; }
+                .summary-card p { font-size: 14pt; }
+                
+                .findings-overview {
+                    background-color: #f8f9fa;
+                    padding: 30px;
+                    border-radius: 10px;
+                    border-left: 5px solid #007bff;
+                }
+                
+                .findings-overview h2 {
+                    color: #007bff;
+                    margin-bottom: 20px;
+                    font-size: 18pt;
+                }
+                
+                .findings-list {
+                    list-style: none;
+                    padding: 0;
+                }
+                
+                .findings-list li {
+                    padding: 10px 0;
+                    border-bottom: 1px solid #dee2e6;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                .findings-list li:last-child {
+                    border-bottom: none;
+                }
+                
+                .finding-name {
+                    font-weight: 500;
+                    flex-grow: 1;
+                }
+                
+                .finding-count {
+                    background-color: #007bff;
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 20px;
+                    font-size: 10pt;
+                    font-weight: bold;
+                    margin-left: 10px;
+                }
+                
+                .conclusion {
+                    background-color: #e8f5e8;
+                    padding: 25px;
+                    border-radius: 10px;
+                    border-left: 5px solid #28a745;
+                    margin-top: 40px;
+                }
+                
+                .conclusion h2 {
+                    color: #28a745;
+                    margin-bottom: 15px;
+                }
+            """,
+            
+            'medium': """
+                @page {
+                    size: A4;
+                    margin: 2cm;
+                    @top-center {
+                        content: "Säkerhetsrapport - Medium";
+                        font-size: 10pt;
+                        color: #666;
+                    }
+                    @bottom-center {
+                        content: counter(page) " av " counter(pages);
+                        font-size: 10pt;
+                        color: #666;
+                    }
+                }
+                
+                body { font-size: 11pt; line-height: 1.4; }
+                .header h1 { font-size: 24pt; }
+                .summary-card h3 { font-size: 32pt; }
+                .summary-card p { font-size: 12pt; }
+                
+                .vulnerability-section {
+                    margin-bottom: 30px;
+                    border: 1px solid #dee2e6;
+                    border-radius: 8px;
+                    padding: 20px;
+                    background-color: #fff;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    page-break-inside: avoid;
+                }
+                
+                .vulnerability-header {
+                    border-bottom: 2px solid #e9ecef;
+                    margin-bottom: 15px;
+                    padding-bottom: 10px;
+                }
+                
+                .vulnerability-header h3 {
+                    margin: 0;
+                    color: #333;
+                    font-size: 14pt;
+                }
+                
+                .detail-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                }
+                
+                .detail-item {
+                    margin-bottom: 15px;
+                }
+                
+                .detail-item h4 {
+                    margin: 0 0 5px 0;
+                    color: #495057;
+                    font-size: 11pt;
+                    font-weight: 600;
+                }
+                
+                .detail-item p {
+                    margin: 0;
+                    font-size: 10pt;
+                    line-height: 1.4;
+                }
+            """,
+            
+            'full': """
+                @page {
+                    size: A4;
+                    margin: 1.2cm;
+                    @top-center {
+                        content: "Fullständig Säkerhetsrapport";
+                        font-size: 9pt;
+                        color: #666;
+                    }
+                    @bottom-center {
+                        content: counter(page) " av " counter(pages);
+                        font-size: 9pt;
+                        color: #666;
+                    }
+                }
+                
+                body { font-size: 10pt; line-height: 1.3; }
+                .header h1 { font-size: 20pt; }
+                .summary-card h3 { font-size: 24pt; }
+                .summary-card p { font-size: 10pt; }
+                
+                .vulnerability-section {
+                    margin-bottom: 20px;
+                    border: 1px solid #dee2e6;
+                    border-radius: 6px;
+                    padding: 15px;
+                    background-color: #fff;
+                    page-break-inside: avoid;
+                }
+                
+                .vulnerability-header {
+                    border-bottom: 1px solid #e9ecef;
+                    margin-bottom: 10px;
+                    padding-bottom: 8px;
+                }
+                
+                .vulnerability-header h3 {
+                    margin: 0;
+                    color: #333;
+                    font-size: 12pt;
+                    display: flex;
+                    align-items: center;
+                }
+                
+                .detail-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 10px;
+                    margin-bottom: 10px;
+                }
+                
+                .detail-item h4 {
+                    margin: 0 0 3px 0;
+                    color: #495057;
+                    font-size: 9pt;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                
+                .detail-item p {
+                    margin: 0;
+                    font-size: 9pt;
+                    line-height: 1.3;
+                }
+                
+                .description-text {
+                    background-color: #f8f9fa;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border-left: 3px solid #007bff;
+                    font-size: 9pt;
+                    line-height: 1.3;
+                    margin-bottom: 10px;
+                }
+                
+                .instances-section {
+                    margin-top: 12px;
+                }
+                
+                .instances-header {
+                    background-color: #e9ecef;
+                    padding: 6px 8px;
+                    border-radius: 4px;
+                    font-weight: 600;
+                    font-size: 9pt;
+                    margin-bottom: 5px;
+                }
+                
+                .instance-row {
+                    background-color: #f8f9fa;
+                    margin-bottom: 3px;
+                    border-radius: 3px;
+                    overflow: hidden;
+                    border-left: 3px solid #6c757d;
+                }
+                
+                .instance-url {
+                    background-color: #e9ecef;
+                    padding: 4px 8px;
+                    font-size: 8pt;
+                    font-weight: 500;
+                    word-break: break-all;
+                }
+                
+                .instance-details {
+                    padding: 4px 8px;
+                    font-size: 8pt;
+                }
+                
+                .param-attack-row {
+                    display: flex;
+                    gap: 15px;
+                }
+                
+                .param-section, .attack-section {
+                    flex: 1;
+                }
+                
+                .param-label, .attack-label {
+                    font-weight: 600;
+                    color: #495057;
+                    margin-bottom: 2px;
+                }
+                
+                .param-value, .attack-value {
+                    background-color: #fff;
+                    padding: 3px 5px;
+                    border-radius: 2px;
+                    border: 1px solid #dee2e6;
+                    word-break: break-all;
+                    font-family: monospace;
+                }
+                
+                .more-instances {
+                    background-color: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    padding: 6px 8px;
+                    border-radius: 4px;
+                    margin-top: 5px;
+                    font-size: 8pt;
+                    font-style: italic;
+                    color: #856404;
+                }
+                
+                .section-header {
+                    color: #333;
+                    font-size: 14pt;
+                    margin: 20px 0 15px 0;
+                    padding-bottom: 5px;
+                    border-bottom: 2px solid #007bff;
+                }
+            """
+        }
+        
+        # Kombinera CSS
+        css_content = base_css + type_specific_css.get(report_type, type_specific_css['full'])
+        
+        # Skapa CSS-objekt
+        css = CSS(string=css_content)
+        
+        # Generera PDF
+        html_doc = HTML(string=html_content)
+        pdf_bytes = html_doc.write_pdf(stylesheets=[css])
+        
+        return pdf_bytes
+        
+    except Exception as e:
+        app.logger.error(f"Error in PDF generation for {report_type}: {str(e)}")
+        raise e
+
 # Hjälp-endpoint för att rensa upp aktiva inspelningar vid behov
 @app.route('/api/access-control/cleanup-recordings', methods=['POST'])
 def api_access_control_cleanup_recordings():
@@ -3986,6 +4486,6 @@ def download_access_control_pdf_report():
 
 if __name__ == '__main__':
     test_zap_functionality()
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True, threaded=True)
 
 

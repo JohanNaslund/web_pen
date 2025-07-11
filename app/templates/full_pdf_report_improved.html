@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fullständig Säkerhetsrapport</title>
+</head>
+<body>
+    <!-- Rapportsidhuvud -->
+    <div class="header">
+        <h1>Fullständig Säkerhetsrapport</h1>
+    </div>
+    
+    <div class="report-info">
+        <p><strong>Målwebbplats:</strong> {{ target_url }}</p>
+        <p><strong>Rapport-ID:</strong> {{ report_id }}</p>
+        <p><strong>Genererad:</strong> {{ report_date }}</p>
+    </div>
+
+    <!-- Sammanfattning -->
+    <div class="summary-section">
+        <h2 class="section-header">Sammanfattning</h2>
+        <div class="summary-grid">
+            <div class="summary-card high-risk">
+                <h3>{{ risk_counts.high }}</h3>
+                <p>Hög risk</p>
+            </div>
+            <div class="summary-card medium-risk">
+                <h3>{{ risk_counts.medium }}</h3>
+                <p>Medelhög risk</p>
+            </div>
+            <div class="summary-card low-risk">
+                <h3>{{ risk_counts.low }}</h3>
+                <p>Låg risk</p>
+            </div>
+            <div class="summary-card info-risk">
+                <h3>{{ risk_counts.info }}</h3>
+                <p>Informativ</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hög risk sårbarheter -->
+    {% if organized_data.high %}
+    <h2 class="section-header">Hög risk sårbarheter</h2>
+    {% for vuln_name, vuln_data in organized_data.high.items() %}
+    <div class="vulnerability-section">
+        <div class="vulnerability-header">
+            <h3><span class="risk-badge high">HIGH</span>{{ vuln_name }}</h3>
+        </div>
+        
+        <div class="vulnerability-details">
+            <div class="description-text">
+                {{ vuln_data.description[:200] }}{% if vuln_data.description|length > 200 %}...{% endif %}
+            </div>
+            
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <h4>Risk</h4>
+                    <p class="risk-badge high">{{ vuln_data.risk }}</p>
+                </div>
+                <div class="detail-item">
+                    <h4>Konfidensgrad</h4>
+                    <p><span class="confidence-badge confidence-{{ vuln_data.confidence.lower() }}">{{ vuln_data.confidence }}</span></p>
+                </div>
+                {% if vuln_data.cweid %}
+                <div class="detail-item">
+                    <h4>CWE</h4>
+                    <p>CWE-{{ vuln_data.cweid }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if vuln_data.instances %}
+            <div class="instances-section">
+                <div class="instances-header">Påverkade platser ({{ vuln_data.instances|length }} st)</div>
+                
+                {% for instance in vuln_data.instances[:10] %}
+                <div class="instance-row">
+                    <div class="instance-url">{{ instance.url }}</div>
+                    {% if instance.param or instance.attack %}
+                    <div class="instance-details">
+                        <div class="param-attack-row">
+                            {% if instance.param %}
+                            <div class="param-section">
+                                <div class="param-label">Parameter:</div>
+                                <div class="param-value">{{ instance.param }}</div>
+                            </div>
+                            {% endif %}
+                            {% if instance.attack %}
+                            <div class="attack-section">
+                                <div class="attack-label">Attack:</div>
+                                <div class="attack-value">{{ instance.attack }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+                {% if vuln_data.instances|length > 10 %}
+                <div class="more-instances">
+                    ...och {{ vuln_data.instances|length - 10 }} fler instanser
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Medelhög risk sårbarheter -->
+    {% if organized_data.medium %}
+    <h2 class="section-header">Medelhög risk sårbarheter</h2>
+    {% for vuln_name, vuln_data in organized_data.medium.items() %}
+    <div class="vulnerability-section">
+        <div class="vulnerability-header">
+            <h3><span class="risk-badge medium">MEDIUM</span>{{ vuln_name }}</h3>
+        </div>
+        
+        <div class="vulnerability-details">
+            <div class="description-text">
+                {{ vuln_data.description[:200] }}{% if vuln_data.description|length > 200 %}...{% endif %}
+            </div>
+            
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <h4>Risk</h4>
+                    <p class="risk-badge medium">{{ vuln_data.risk }}</p>
+                </div>
+                <div class="detail-item">
+                    <h4>Konfidensgrad</h4>
+                    <p><span class="confidence-badge confidence-{{ vuln_data.confidence.lower() }}">{{ vuln_data.confidence }}</span></p>
+                </div>
+                {% if vuln_data.cweid %}
+                <div class="detail-item">
+                    <h4>CWE</h4>
+                    <p>CWE-{{ vuln_data.cweid }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if vuln_data.instances %}
+            <div class="instances-section">
+                <div class="instances-header">Påverkade platser ({{ vuln_data.instances|length }} st)</div>
+                
+                {% for instance in vuln_data.instances[:10] %}
+                <div class="instance-row">
+                    <div class="instance-url">{{ instance.url }}</div>
+                    {% if instance.param or instance.attack %}
+                    <div class="instance-details">
+                        <div class="param-attack-row">
+                            {% if instance.param %}
+                            <div class="param-section">
+                                <div class="param-label">Parameter:</div>
+                                <div class="param-value">{{ instance.param }}</div>
+                            </div>
+                            {% endif %}
+                            {% if instance.attack %}
+                            <div class="attack-section">
+                                <div class="attack-label">Attack:</div>
+                                <div class="attack-value">{{ instance.attack }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+                {% if vuln_data.instances|length > 10 %}
+                <div class="more-instances">
+                    ...och {{ vuln_data.instances|length - 10 }} fler instanser
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Låg risk sårbarheter -->
+    {% if organized_data.low %}
+    <h2 class="section-header">Låg risk sårbarheter</h2>
+    {% for vuln_name, vuln_data in organized_data.low.items() %}
+    <div class="vulnerability-section">
+        <div class="vulnerability-header">
+            <h3><span class="risk-badge low">LOW</span>{{ vuln_name }}</h3>
+        </div>
+        
+        <div class="vulnerability-details">
+            <div class="description-text">
+                {{ vuln_data.description[:200] }}{% if vuln_data.description|length > 200 %}...{% endif %}
+            </div>
+            
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <h4>Risk</h4>
+                    <p class="risk-badge low">{{ vuln_data.risk }}</p>
+                </div>
+                <div class="detail-item">
+                    <h4>Konfidensgrad</h4>
+                    <p><span class="confidence-badge confidence-{{ vuln_data.confidence.lower() }}">{{ vuln_data.confidence }}</span></p>
+                </div>
+                {% if vuln_data.cweid %}
+                <div class="detail-item">
+                    <h4>CWE</h4>
+                    <p>CWE-{{ vuln_data.cweid }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if vuln_data.instances %}
+            <div class="instances-section">
+                <div class="instances-header">Påverkade platser ({{ vuln_data.instances|length }} st)</div>
+                
+                {% for instance in vuln_data.instances[:10] %}
+                <div class="instance-row">
+                    <div class="instance-url">{{ instance.url }}</div>
+                    {% if instance.param or instance.attack %}
+                    <div class="instance-details">
+                        <div class="param-attack-row">
+                            {% if instance.param %}
+                            <div class="param-section">
+                                <div class="param-label">Parameter:</div>
+                                <div class="param-value">{{ instance.param }}</div>
+                            </div>
+                            {% endif %}
+                            {% if instance.attack %}
+                            <div class="attack-section">
+                                <div class="attack-label">Attack:</div>
+                                <div class="attack-value">{{ instance.attack }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+                {% if vuln_data.instances|length > 10 %}
+                <div class="more-instances">
+                    ...och {{ vuln_data.instances|length - 10 }} fler instanser
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Informativa fynd -->
+    {% if organized_data.info %}
+    <h2 class="section-header">Informativa fynd</h2>
+    {% for vuln_name, vuln_data in organized_data.info.items() %}
+    <div class="vulnerability-section">
+        <div class="vulnerability-header">
+            <h3><span class="risk-badge info">INFO</span>{{ vuln_name }}</h3>
+        </div>
+        
+        <div class="vulnerability-details">
+            <div class="description-text">
+                {{ vuln_data.description[:200] }}{% if vuln_data.description|length > 200 %}...{% endif %}
+            </div>
+            
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <h4>Risk</h4>
+                    <p class="risk-badge info">{{ vuln_data.risk }}</p>
+                </div>
+                <div class="detail-item">
+                    <h4>Konfidensgrad</h4>
+                    <p><span class="confidence-badge confidence-{{ vuln_data.confidence.lower() }}">{{ vuln_data.confidence }}</span></p>
+                </div>
+                {% if vuln_data.cweid %}
+                <div class="detail-item">
+                    <h4>CWE</h4>
+                    <p>CWE-{{ vuln_data.cweid }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if vuln_data.instances %}
+            <div class="instances-section">
+                <div class="instances-header">Påverkade platser ({{ vuln_data.instances|length }} st)</div>
+                
+                {% for instance in vuln_data.instances[:10] %}
+                <div class="instance-row">
+                    <div class="instance-url">{{ instance.url }}</div>
+                    {% if instance.param or instance.attack %}
+                    <div class="instance-details">
+                        <div class="param-attack-row">
+                            {% if instance.param %}
+                            <div class="param-section">
+                                <div class="param-label">Parameter:</div>
+                                <div class="param-value">{{ instance.param }}</div>
+                            </div>
+                            {% endif %}
+                            {% if instance.attack %}
+                            <div class="attack-section">
+                                <div class="attack-label">Attack:</div>
+                                <div class="attack-value">{{ instance.attack }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+                {% if vuln_data.instances|length > 10 %}
+                <div class="more-instances">
+                    ...och {{ vuln_data.instances|length - 10 }} fler instanser
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Meddelande om inga sårbarheter -->
+    {% if not organized_data.high and not organized_data.medium and not organized_data.low and not organized_data.info %}
+    <div class="no-vulnerabilities">
+        <h2>Inga sårbarheter hittades</h2>
+        <p>Gratulerar! Scanningen hittade inga säkerhetsproblem på den testade webbplatsen.</p>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>Denna rapport genererades automatiskt av säkerhetsscanningssystemet • För mer information kontakta säkerhetsteamet</p>
+    </div>
+
+</body>
+</html>
