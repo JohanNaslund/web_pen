@@ -336,96 +336,82 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.error) {
                     console.error('API error:', data.error);
-                    document.getElementById('vulnerability-container').innerHTML = 
-                        `<div class="alert alert-danger">Error loading vulnerabilities: ${data.error}</div>`;
+                    // Uppdatera bara räknarna vid fel
+                    updateCounts(0, 0, 0, 0);
+                    showErrorInRecommendations('Error loading vulnerabilities: ' + data.error);
                     return;
                 }
                 
                 console.log('Vulnerabilities fetched successfully');
-                displayVulnerabilities(data);
+                updateCounts(data);
                 generateRecommendations(data);
+                
+                // Dölj laddningsmeddelande och visa framgång
+                hideLoadingMessage();
             })
             .catch(error => {
                 console.error('Error fetching vulnerabilities:', error);
-                document.getElementById('vulnerability-container').innerHTML = 
-                    '<div class="alert alert-danger">Error loading vulnerabilities. Please try again.</div>';
+                updateCounts(0, 0, 0, 0);
+                showErrorInRecommendations('Error loading vulnerabilities. Please try again.');
+                hideLoadingMessage();
             });
     }
     
-    function displayVulnerabilities(data) {
-        const container = document.getElementById('vulnerability-container');
-        const alertsByRisk = data.alerts_by_risk;
+    function updateCounts(data) {
+        // Säkert sätt att uppdatera räknare
+        const alertsByRisk = data.alerts_by_risk || {};
         
-        let html = '';
+        const highCount = alertsByRisk.highAlerts ? alertsByRisk.highAlerts.length : 0;
+        const mediumCount = alertsByRisk.mediumAlerts ? alertsByRisk.mediumAlerts.length : 0;
+        const lowCount = alertsByRisk.lowAlerts ? alertsByRisk.lowAlerts.length : 0;
+        const infoCount = alertsByRisk.infoAlerts ? alertsByRisk.infoAlerts.length : 0;
         
-        // High Risk Alerts
-        if (alertsByRisk.highAlerts && alertsByRisk.highAlerts.length > 0) {
-            html += createRiskSection('Hög Risk', alertsByRisk.highAlerts, 'danger');
-        }
+        // Uppdatera räknare säkert
+        safeUpdateElement('high-risk-count', highCount);
+        safeUpdateElement('medium-risk-count', mediumCount);
+        safeUpdateElement('low-risk-count', lowCount);
+        safeUpdateElement('info-risk-count', infoCount);
         
-        // Medium Risk Alerts
-        if (alertsByRisk.mediumAlerts && alertsByRisk.mediumAlerts.length > 0) {
-            html += createRiskSection('Medelhög Risk', alertsByRisk.mediumAlerts, 'warning');
-        }
-        
-        // Low Risk Alerts
-        if (alertsByRisk.lowAlerts && alertsByRisk.lowAlerts.length > 0) {
-            html += createRiskSection('Låg Risk', alertsByRisk.lowAlerts, 'info');
-        }
-        
-        // Informational Alerts
-        if (alertsByRisk.infoAlerts && alertsByRisk.infoAlerts.length > 0) {
-            html += createRiskSection('Informativ', alertsByRisk.infoAlerts, 'secondary');
-        }
-        
-        // Update summary counts
-        document.getElementById('high-risk-count').textContent = alertsByRisk.highAlerts ? alertsByRisk.highAlerts.length : 0;
-        document.getElementById('medium-risk-count').textContent = alertsByRisk.mediumAlerts ? alertsByRisk.mediumAlerts.length : 0;
-        document.getElementById('low-risk-count').textContent = alertsByRisk.lowAlerts ? alertsByRisk.lowAlerts.length : 0;
-        document.getElementById('info-count').textContent = alertsByRisk.infoAlerts ? alertsByRisk.infoAlerts.length : 0;
-        
-        // Update report date
-        document.getElementById('report-date').textContent = new Date().toLocaleString('sv-SE');
-        
-        container.innerHTML = html || '<div class="alert alert-success">Inga sårbarheter hittades!</div>';
+        // Uppdatera report date
+        safeUpdateElement('report-date', new Date().toLocaleString('sv-SE'));
     }
     
-    function createRiskSection(title, alerts, variant) {
-        let html = `
-            <div class="card mb-4">
-                <div class="card-header bg-${variant} text-white">
-                    <h4><i class="bi bi-exclamation-triangle"></i> ${title} (${alerts.length})</h4>
-                </div>
-                <div class="card-body">
-        `;
-        
-        alerts.forEach(alert => {
-            html += `
-                <div class="mb-3 p-3 border rounded">
-                    <h5>${alert.name}</h5>
-                    <p><strong>Beskrivning:</strong> ${alert.description || 'Ingen beskrivning tillgänglig'}</p>
-                    <p><strong>URL:</strong> <code>${alert.url || 'N/A'}</code></p>
-                    ${alert.param ? `<p><strong>Parameter:</strong> <code>${alert.param}</code></p>` : ''}
-                    ${alert.attack ? `<p><strong>Attack:</strong> <code>${alert.attack}</code></p>` : ''}
-                    <div class="d-flex justify-content-between">
-                        <span class="badge bg-${variant}">${alert.risk || 'Unknown'}</span>
-                        <span class="badge bg-secondary">${alert.confidence || 'Unknown'}</span>
-                    </div>
+    function safeUpdateElement(id, content) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = content;
+        } else {
+            console.warn(`Element with id '${id}' not found`);
+        }
+    }
+    
+    function hideLoadingMessage() {
+        // Dölj laddningsmeddelanden
+        const loadingElement = document.getElementById('alerts-loading');
+        if (loadingElement) {
+            loadingElement.classList.add('d-none');
+        }
+    }
+    
+    function showErrorInRecommendations(message) {
+        const recommendationsContainer = document.getElementById('recommendations-container');
+        if (recommendationsContainer) {
+            recommendationsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> ${message}
                 </div>
             `;
-        });
-        
-        html += `
-                </div>
-            </div>
-        `;
-        
-        return html;
+        }
     }
     
     function generateRecommendations(data) {
         const recommendationsContainer = document.getElementById('recommendations-container');
-        const alertsByRisk = data.alerts_by_risk;
+        if (!recommendationsContainer) {
+            console.warn('Recommendations container not found');
+            return;
+        }
+        
+        const alertsByRisk = data.alerts_by_risk || {};
         
         let prioritizedRecommendations = [];
         
@@ -455,6 +441,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     count: xssAlerts.length
                 });
             }
+            
+            // Generisk rekommendation för andra höga risker
+            if (prioritizedRecommendations.length === 0) {
+                prioritizedRecommendations.push({
+                    title: 'Åtgärda högrisk sårbarheter omedelbart',
+                    description: 'Kritiska säkerhetsproblem har identifierats som kräver omedelbar uppmärksamhet.',
+                    priority: 'high',
+                    count: alertsByRisk.highAlerts.length
+                });
+            }
         }
         
         // Medelhög prioritet
@@ -472,22 +468,45 @@ document.addEventListener('DOMContentLoaded', function() {
             prioritizedRecommendations.push({
                 title: 'Förbättra informationssäkerhet',
                 description: 'Dölj versionsinfo och implementera proper cache-control headers.',
-                priority: 'low'
+                priority: 'low',
+                count: alertsByRisk.lowAlerts.length
             });
         }
         
+        // Allmän rekommendation
         prioritizedRecommendations.push({
             title: 'Implementera säker utvecklingsprocess',
             description: 'Utbilda utvecklare i säker kodning och implementera säkerhetsgranskningar i utvecklingsprocessen.',
             priority: 'low'
         });
         
+        // Om inga sårbarheter finns
+        if (prioritizedRecommendations.length === 1) { // Bara den allmänna rekommendationen
+            prioritizedRecommendations.unshift({
+                title: 'Bra jobbat!',
+                description: 'Inga allvarliga säkerhetsproblem hittades. Fortsätt med regelbundna säkerhetskontroller.',
+                priority: 'success'
+            });
+        }
+        
         // Visa rekommendationer
         let recommendationsHTML = `<ul class="list-group">`;
         
         prioritizedRecommendations.forEach(rec => {
-            const priorityClass = rec.priority === 'high' ? 'list-group-item-danger' : 
-                                  (rec.priority === 'medium' ? 'list-group-item-warning' : 'list-group-item-info');
+            let priorityClass;
+            switch (rec.priority) {
+                case 'high':
+                    priorityClass = 'list-group-item-danger';
+                    break;
+                case 'medium':
+                    priorityClass = 'list-group-item-warning';
+                    break;
+                case 'success':
+                    priorityClass = 'list-group-item-success';
+                    break;
+                default:
+                    priorityClass = 'list-group-item-info';
+            }
             
             const countBadge = rec.count ? `<span class="badge bg-secondary">${rec.count}</span>` : '';
             
@@ -575,24 +594,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // ====================================================
     
     // Hantera nedladdning av rapport som JSON
-    document.getElementById('download-report-btn').addEventListener('click', function() {
-        fetch('/api/download-report/{{ report_id }}')
-            .then(response => response.json())
-            .then(data => {
-                // Skapa en JSON-fil för nedladdning
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", `pentesting_report_${data.id || '{{ report_id }}'}.json`);
-                document.body.appendChild(downloadAnchorNode);
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
-            })
-            .catch(error => {
-                console.error('Error downloading report:', error);
-                alert('Kunde inte hämta rapporten. Vänligen försök igen.');
-            });
-    });
+    const downloadReportBtn = document.getElementById('download-report-btn');
+    if (downloadReportBtn) {
+        downloadReportBtn.addEventListener('click', function() {
+            fetch('/api/download-report/{{ report_id }}')
+                .then(response => response.json())
+                .then(data => {
+                    // Skapa en JSON-fil för nedladdning
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", `pentesting_report_${data.id || '{{ report_id }}'}.json`);
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                })
+                .catch(error => {
+                    console.error('Error downloading report:', error);
+                    alert('Kunde inte hämta rapporten. Vänligen försök igen.');
+                });
+        });
+    }
     
     // ====================================================
     // HJÄLPFUNKTIONER FÖR MEDDELANDEN
@@ -606,9 +628,11 @@ document.addEventListener('DOMContentLoaded', function() {
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
         
-        // Lägg till i början av card-body
+        // Lägg till i början av första card-body vi hittar
         const cardBody = document.querySelector('.card-body');
-        cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        if (cardBody) {
+            cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        }
         
         // Ta bort efter 5 sekunder
         setTimeout(() => {
@@ -626,9 +650,11 @@ document.addEventListener('DOMContentLoaded', function() {
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
         
-        // Lägg till i början av card-body
+        // Lägg till i början av första card-body vi hittar
         const cardBody = document.querySelector('.card-body');
-        cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        if (cardBody) {
+            cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        }
         
         // Ta bort efter 5 sekunder
         setTimeout(() => {
@@ -658,12 +684,24 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch('/api/zap-alerts-by-risk')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('debug-json').textContent = JSON.stringify(data, null, 2);
-                    document.getElementById('debug-results').classList.remove('d-none');
+                    const debugJson = document.getElementById('debug-json');
+                    if (debugJson) {
+                        debugJson.textContent = JSON.stringify(data, null, 2);
+                    }
+                    const debugResults = document.getElementById('debug-results');
+                    if (debugResults) {
+                        debugResults.classList.remove('d-none');
+                    }
                 })
                 .catch(error => {
-                    document.getElementById('debug-json').textContent = 'Error: ' + error.message;
-                    document.getElementById('debug-results').classList.remove('d-none');
+                    const debugJson = document.getElementById('debug-json');
+                    if (debugJson) {
+                        debugJson.textContent = 'Error: ' + error.message;
+                    }
+                    const debugResults = document.getElementById('debug-results');
+                    if (debugResults) {
+                        debugResults.classList.remove('d-none');
+                    }
                 });
         });
     }
@@ -673,12 +711,24 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch('/debug-zap-api')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('debug-json').textContent = JSON.stringify(data, null, 2);
-                    document.getElementById('debug-results').classList.remove('d-none');
+                    const debugJson = document.getElementById('debug-json');
+                    if (debugJson) {
+                        debugJson.textContent = JSON.stringify(data, null, 2);
+                    }
+                    const debugResults = document.getElementById('debug-results');
+                    if (debugResults) {
+                        debugResults.classList.remove('d-none');
+                    }
                 })
                 .catch(error => {
-                    document.getElementById('debug-json').textContent = 'Error: ' + error.message;
-                    document.getElementById('debug-results').classList.remove('d-none');
+                    const debugJson = document.getElementById('debug-json');
+                    if (debugJson) {
+                        debugJson.textContent = 'Error: ' + error.message;
+                    }
+                    const debugResults = document.getElementById('debug-results');
+                    if (debugResults) {
+                        debugResults.classList.remove('d-none');
+                    }
                 });
         });
     }

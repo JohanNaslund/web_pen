@@ -3730,65 +3730,6 @@ def access_control_report():
                         datetime=datetime)  # Skicka datetime till templaten
         return redirect(url_for('access_control'))
 
-@app.route('/api/download-pdf-report')
-def download_pdf_report():
-    """Generera och ladda ner PDF-rapport"""
-    try:
-        target_url = session.get('target_url', '')
-        
-        if not target_url:
-            flash("Vänligen konfigurera ett mål först.", "warning")
-            return redirect(url_for('target'))
-        
-        # Hämta sårbarhetsdata direkt från ZAP API (samma logik som api_zap_alerts_by_risk)
-        try:
-            alerts_data = get_zap_alerts_data(target_url)
-            if 'error' in alerts_data:
-                return jsonify({'error': f'Kunde inte hämta sårbarhetsdata: {alerts_data["error"]}'}), 500
-        except Exception as e:
-            return jsonify({'error': f'Fel vid hämtning av data: {str(e)}'}), 500
-        
-        # Skapa rapport-ID och datum
-        report_id = str(uuid.uuid4())
-        report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Få faktisk alerts data från alerts_by_risk objektet
-        alerts_by_risk = alerts_data.get('alerts_by_risk', {})
-        
-        # Räkna sårbarheter per risknivå
-        risk_counts = {
-            'high': len(alerts_by_risk.get('highAlerts', [])),
-            'medium': len(alerts_by_risk.get('mediumAlerts', [])),
-            'low': len(alerts_by_risk.get('lowAlerts', [])),
-            'info': len(alerts_by_risk.get('infoAlerts', []))
-        }
-        
-        # Organisera data för PDF-template
-        organized_data = organize_alerts_by_type_and_risk(alerts_by_risk)
-        
-        # Rendera HTML-template för PDF
-        html_content = render_template('pdf_report.html',
-            target_url=target_url,
-            report_id=report_id,
-            report_date=report_date,
-            risk_counts=risk_counts,
-            organized_data=organized_data
-        )
-        
-        # Skapa PDF
-        pdf_file = generate_pdf_from_html(html_content)
-        
-        # Skapa response med PDF
-        response = make_response(pdf_file)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename="sakerheterapport_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
-        
-        return response
-        
-    except Exception as e:
-        app.logger.error(f"Error generating PDF report: {str(e)}")
-        return jsonify({'error': f'Fel vid generering av PDF: {str(e)}'}), 500
-
 
 def organize_alerts_by_type_and_risk(alerts_by_risk):
     """Organisera alerts efter typ och risk för PDF-rapporten"""
