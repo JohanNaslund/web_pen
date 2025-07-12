@@ -366,16 +366,140 @@ document.addEventListener('DOMContentLoaded', function() {
         const lowCount = alertsByRisk.lowAlerts ? alertsByRisk.lowAlerts.length : 0;
         const infoCount = alertsByRisk.infoAlerts ? alertsByRisk.infoAlerts.length : 0;
         
-        // Uppdatera räknare säkert
+        // FIXAT: Uppdatera räknare med korrekta ID:n
+        safeUpdateElement('high-risk-badge', highCount);
+        safeUpdateElement('medium-risk-badge', mediumCount);
+        safeUpdateElement('low-risk-badge', lowCount);
+        safeUpdateElement('info-risk-badge', infoCount);
+        
+        // Uppdatera även summary cards om de finns
         safeUpdateElement('high-risk-count', highCount);
         safeUpdateElement('medium-risk-count', mediumCount);
         safeUpdateElement('low-risk-count', lowCount);
         safeUpdateElement('info-risk-count', infoCount);
         
+        // NYTT: Populera accordion-innehåll
+        populateAccordionContent('high', alertsByRisk.highAlerts || []);
+        populateAccordionContent('medium', alertsByRisk.mediumAlerts || []);
+        populateAccordionContent('low', alertsByRisk.lowAlerts || []);
+        populateAccordionContent('info', alertsByRisk.infoAlerts || []);
+        
         // Uppdatera report date
         safeUpdateElement('report-date', new Date().toLocaleString('sv-SE'));
+    }     
+
+
+    function populateAccordionContent(riskLevel, alerts) {
+        const containerId = `${riskLevel}-risk-types-accordion`;
+        const emptyMessageId = `${riskLevel}-risk-empty`;
+        
+        const container = document.getElementById(containerId);
+        const emptyMessage = document.getElementById(emptyMessageId);
+        
+        if (!container) {
+            console.warn(`Container ${containerId} not found`);
+            return;
+        }
+        
+        // Rensa befintligt innehåll
+        container.innerHTML = '';
+        
+        if (alerts.length === 0) {
+            // Visa "inga sårbarheter" meddelande
+            if (emptyMessage) {
+                emptyMessage.classList.remove('d-none');
+            }
+            return;
+        }
+        
+        // Dölj "inga sårbarheter" meddelande
+        if (emptyMessage) {
+            emptyMessage.classList.add('d-none');
+        }
+        
+        // Gruppera alerts per typ
+        const alertsByType = {};
+        alerts.forEach(alert => {
+            const alertName = alert.name || 'Okänd sårbarhet';
+            if (!alertsByType[alertName]) {
+                alertsByType[alertName] = [];
+            }
+            alertsByType[alertName].push(alert);
+        });
+        
+        // Skapa accordion items för varje alert-typ
+        Object.keys(alertsByType).forEach((alertName, index) => {
+            const alertList = alertsByType[alertName];
+            const alertId = `${riskLevel}-${index}`;
+            
+            const accordionItem = `
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading-${alertId}">
+                        <button class="accordion-button collapsed" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#collapse-${alertId}" 
+                                aria-expanded="false" aria-controls="collapse-${alertId}">
+                            ${alertName} <span class="badge bg-secondary ms-2">${alertList.length}</span>
+                        </button>
+                    </h2>
+                    <div id="collapse-${alertId}" class="accordion-collapse collapse" 
+                        aria-labelledby="heading-${alertId}" data-bs-parent="#${containerId}">
+                        <div class="accordion-body">
+                            ${generateAlertDetails(alertList)}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', accordionItem);
+        });
+    }
+
+    // NYTT: Funktion för att generera alert-detaljer
+    function generateAlertDetails(alerts) {
+        let html = '<div class="alert-instances">';
+        
+        alerts.forEach((alert, index) => {
+            if (index >= 5) { // Begränsa till 5 instanser
+                html += `<p class="text-muted">...och ${alerts.length - 5} fler instanser</p>`;
+                return;
+            }
+            
+            html += `
+                <div class="alert-instance mb-3 p-3 border rounded">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <strong>URL:</strong> <code class="text-break">${alert.url || 'N/A'}</code>
+                        </div>
+                        <div class="col-md-4">
+                            <span class="badge bg-${getRiskColorClass(alert.risk)} text-white">${alert.risk || 'Unknown'}</span>
+                            <span class="badge bg-info ms-1">${alert.confidence || 'Unknown'}</span>
+                        </div>
+                    </div>
+                    ${alert.param ? `<div class="mt-2"><strong>Parameter:</strong> <code>${alert.param}</code></div>` : ''}
+                    ${alert.description ? `<div class="mt-2"><small>${alert.description.substring(0, 200)}...</small></div>` : ''}
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="showAlertDetails('${alert.alertId || index}')">
+                        Visa detaljer
+                    </button>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        return html;
+    }
+
+    // NYTT: Hjälpfunktion för risk-färger
+    function getRiskColorClass(risk) {
+        switch (risk?.toLowerCase()) {
+            case 'high': return 'danger';
+            case 'medium': return 'warning';
+            case 'low': return 'info';
+            case 'informational': return 'secondary';
+            default: return 'secondary';
+        }
     }
     
+
     function safeUpdateElement(id, content) {
         const element = document.getElementById(id);
         if (element) {
