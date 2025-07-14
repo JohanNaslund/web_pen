@@ -1,7 +1,14 @@
+/**
+ * JavaScript för rapport-sidan
+ */
+
+// Globala variabler
+let currentAlertData = null;
+
 document.addEventListener('DOMContentLoaded', function() {
     
     // ====================================================
-    // FUNKTIONER FÖR SÅRBARHETSDATA (BEFINTLIG KOD)
+    // FUNKTIONER FÖR SÅRBARHETSDATA
     // ====================================================
     
     function fetchVulnerabilities() {
@@ -11,7 +18,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.error) {
                     console.error('API error:', data.error);
-                    // Uppdatera bara räknarna vid fel
                     updateCounts(0, 0, 0, 0);
                     showErrorInRecommendations('Error loading vulnerabilities: ' + data.error);
                     return;
@@ -20,8 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Vulnerabilities fetched successfully');
                 updateCounts(data);
                 generateRecommendations(data);
-                
-                // Dölj laddningsmeddelande och visa framgång
+                populateVulnerabilityAccordions(data);
                 hideLoadingMessage();
             })
             .catch(error => {
@@ -33,7 +38,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateCounts(data) {
-        // Säkert sätt att uppdatera räknare
         const alertsByRisk = data.alerts_by_risk || {};
         
         const highCount = alertsByRisk.highAlerts ? alertsByRisk.highAlerts.length : 0;
@@ -41,40 +45,33 @@ document.addEventListener('DOMContentLoaded', function() {
         const lowCount = alertsByRisk.lowAlerts ? alertsByRisk.lowAlerts.length : 0;
         const infoCount = alertsByRisk.infoAlerts ? alertsByRisk.infoAlerts.length : 0;
         
-        // FIXAT: Uppdatera räknare med korrekta ID:n
-        safeUpdateElement('high-risk-badge', highCount);
-        safeUpdateElement('medium-risk-badge', mediumCount);
-        safeUpdateElement('low-risk-badge', lowCount);
-        safeUpdateElement('info-risk-badge', infoCount);
-        
-        // Uppdatera även summary cards om de finns
         safeUpdateElement('high-risk-count', highCount);
         safeUpdateElement('medium-risk-count', mediumCount);
         safeUpdateElement('low-risk-count', lowCount);
         safeUpdateElement('info-risk-count', infoCount);
         
-        // NYTT: Populera accordion-innehåll
-        populateAccordionContent('high', alertsByRisk.highAlerts || []);
-        populateAccordionContent('medium', alertsByRisk.mediumAlerts || []);
-        populateAccordionContent('low', alertsByRisk.lowAlerts || []);
-        populateAccordionContent('info', alertsByRisk.infoAlerts || []);
+        // Uppdatera badges
+        safeUpdateElement('high-risk-badge', highCount);
+        safeUpdateElement('medium-risk-badge', mediumCount);
+        safeUpdateElement('low-risk-badge', lowCount);
+        safeUpdateElement('info-risk-badge', infoCount);
+    }
+    
+    function populateVulnerabilityAccordions(data) {
+        const alertsByRisk = data.alerts_by_risk || {};
         
-        // Uppdatera report date
-        safeUpdateElement('report-date', new Date().toLocaleString('sv-SE'));
-    }     
-
-
-    function populateAccordionContent(riskLevel, alerts) {
-        const containerId = `${riskLevel}-risk-types-accordion`;
-        const emptyMessageId = `${riskLevel}-risk-empty`;
+        // Populera varje risknivå
+        populateRiskLevelAccordion('high', alertsByRisk.highAlerts || []);
+        populateRiskLevelAccordion('medium', alertsByRisk.mediumAlerts || []);
+        populateRiskLevelAccordion('low', alertsByRisk.lowAlerts || []);
+        populateRiskLevelAccordion('info', alertsByRisk.infoAlerts || []);
+    }
+    
+    function populateRiskLevelAccordion(riskLevel, alerts) {
+        const container = document.getElementById(`${riskLevel}-risk-types-accordion`);
+        const emptyMessage = document.getElementById(`${riskLevel}-risk-empty`);
         
-        const container = document.getElementById(containerId);
-        const emptyMessage = document.getElementById(emptyMessageId);
-        
-        if (!container) {
-            console.warn(`Container ${containerId} not found`);
-            return;
-        }
+        if (!container) return;
         
         // Rensa befintligt innehåll
         container.innerHTML = '';
@@ -117,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </button>
                     </h2>
                     <div id="collapse-${alertId}" class="accordion-collapse collapse" 
-                        aria-labelledby="heading-${alertId}" data-bs-parent="#${containerId}">
+                        aria-labelledby="heading-${alertId}" data-bs-parent="#${riskLevel}-risk-types-accordion">
                         <div class="accordion-body">
                             ${generateAlertDetails(alertList)}
                         </div>
@@ -129,18 +126,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // NYTT: Funktion för att generera alert-detaljer
+    // Uppdaterad funktion för att generera alert-detaljer
     function generateAlertDetails(alerts) {
         let html = '<div class="alert-instances">';
         
         alerts.forEach((alert, index) => {
-            if (index >= 5) { // Begränsa till 5 instanser
+            if (index >= 5) {
                 html += `<p class="text-muted">...och ${alerts.length - 5} fler instanser</p>`;
                 return;
             }
-            
-            // Skapa en säker JSON-string för onclick
-            const alertJson = JSON.stringify(alert).replace(/"/g, '&quot;');
             
             html += `
                 <div class="alert-instance mb-3 p-3 border rounded">
@@ -149,20 +143,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             <strong>URL:</strong> <code class="text-break">${escapeHtml(alert.url || 'N/A')}</code>
                         </div>
                         <div class="col-md-4">
-                            <button class="btn btn-sm btn-outline-primary mt-2 float-end" onclick='showAlertDetailsFromData(${alertJson})'>
-                                <i class="bi bi-info-circle me-1"></i>Visa detaljer
-                            </button>
+                            <span class="badge bg-${getRiskColorClass(alert.risk)} text-white">${alert.risk || 'Unknown'}</span>
+                            <span class="badge bg-info ms-1">${alert.confidence || 'Unknown'}</span>
                         </div>
                     </div>
+                    ${alert.param ? `<div class="mt-2"><strong>Parameter:</strong> <code>${escapeHtml(alert.param)}</code></div>` : ''}
+                    ${alert.description ? `<div class="mt-2"><small>${escapeHtml(alert.description.substring(0, 200))}...</small></div>` : ''}
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="showAlertDetails('${alert.id}')">
+                        <i class="bi bi-info-circle me-1"></i>Visa detaljer
+                    </button>
                 </div>
             `;
         });
         
         html += '</div>';
         return html;
-}
+    }
 
-    // NYTT: Hjälpfunktion för risk-färger
+    // Hjälpfunktion för risk-färger
     function getRiskColorClass(risk) {
         switch (risk?.toLowerCase()) {
             case 'high': return 'danger';
@@ -173,313 +171,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-
-    function safeUpdateElement(id, content) {
-        const element = document.getElementById(id);
-        if (element) {
-            element.textContent = content;
-        } else {
-            console.warn(`Element with id '${id}' not found`);
-        }
-    }
-    
-    function hideLoadingMessage() {
-        // Dölj laddningsmeddelanden
-        const loadingElement = document.getElementById('alerts-loading');
-        if (loadingElement) {
-            loadingElement.classList.add('d-none');
-        }
-    }
-    
-    function showErrorInRecommendations(message) {
-        const recommendationsContainer = document.getElementById('recommendations-container');
-        if (recommendationsContainer) {
-            recommendationsContainer.innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle"></i> ${message}
-                </div>
-            `;
-        }
-    }
-    
-    function generateRecommendations(data) {
-        const recommendationsContainer = document.getElementById('recommendations-container');
-        if (!recommendationsContainer) {
-            console.warn('Recommendations container not found');
-            return;
-        }
-        
-        const alertsByRisk = data.alerts_by_risk || {};
-        
-        let prioritizedRecommendations = [];
-        
-        // Hög prioritet
-        if (alertsByRisk.highAlerts && alertsByRisk.highAlerts.length > 0) {
-            // Kolla för specifika sårbarheter
-            const sqlInjectionAlerts = alertsByRisk.highAlerts.filter(alert => 
-                alert.name && alert.name.toLowerCase().includes('sql injection'));
-            
-            if (sqlInjectionAlerts.length > 0) {
-                prioritizedRecommendations.push({
-                    title: 'Åtgärda SQL Injection sårbarheter OMEDELBART',
-                    description: 'SQL Injection är en kritisk sårbarhet som kan leda till databaskompromiss. Använd parameteriserade queries och validera all input.',
-                    priority: 'high',
-                    count: sqlInjectionAlerts.length
-                });
-            }
-            
-            const xssAlerts = alertsByRisk.highAlerts.filter(alert => 
-                alert.name && (alert.name.toLowerCase().includes('xss') || alert.name.toLowerCase().includes('cross site scripting')));
-            
-            if (xssAlerts.length > 0) {
-                prioritizedRecommendations.push({
-                    title: 'Implementera XSS-skydd',
-                    description: 'Cross-Site Scripting sårbarheter hittades. Implementera Content Security Policy och validera/koda all output.',
-                    priority: 'high',
-                    count: xssAlerts.length
-                });
-            }
-            
-            // Generisk rekommendation för andra höga risker
-            if (prioritizedRecommendations.length === 0) {
-                prioritizedRecommendations.push({
-                    title: 'Åtgärda högrisk sårbarheter omedelbart',
-                    description: 'Kritiska säkerhetsproblem har identifierats som kräver omedelbar uppmärksamhet.',
-                    priority: 'high',
-                    count: alertsByRisk.highAlerts.length
-                });
-            }
-        }
-        
-        // Medelhög prioritet
-        if (alertsByRisk.mediumAlerts && alertsByRisk.mediumAlerts.length > 0) {
-            prioritizedRecommendations.push({
-                title: 'Granska säkerhetsheaders',
-                description: 'Implementera säkerhetsheaders som CSRF-tokens, X-Frame-Options och Content Security Policy.',
-                priority: 'medium',
-                count: alertsByRisk.mediumAlerts.length
-            });
-        }
-        
-        // Låg prioritet
-        if (alertsByRisk.lowAlerts && alertsByRisk.lowAlerts.length > 0) {
-            prioritizedRecommendations.push({
-                title: 'Förbättra informationssäkerhet',
-                description: 'Dölj versionsinfo och implementera proper cache-control headers.',
-                priority: 'low',
-                count: alertsByRisk.lowAlerts.length
-            });
-        }
-        
-        // Allmän rekommendation
-        prioritizedRecommendations.push({
-            title: 'Implementera säker utvecklingsprocess',
-            description: 'Utbilda utvecklare i säker kodning och implementera säkerhetsgranskningar i utvecklingsprocessen.',
-            priority: 'low'
-        });
-        
-        // Om inga sårbarheter finns
-        if (prioritizedRecommendations.length === 1) { // Bara den allmänna rekommendationen
-            prioritizedRecommendations.unshift({
-                title: 'Bra jobbat!',
-                description: 'Inga allvarliga säkerhetsproblem hittades. Fortsätt med regelbundna säkerhetskontroller.',
-                priority: 'success'
-            });
-        }
-        
-        // Visa rekommendationer
-        let recommendationsHTML = `<ul class="list-group">`;
-        
-        prioritizedRecommendations.forEach(rec => {
-            let priorityClass;
-            switch (rec.priority) {
-                case 'high':
-                    priorityClass = 'list-group-item-danger';
-                    break;
-                case 'medium':
-                    priorityClass = 'list-group-item-warning';
-                    break;
-                case 'success':
-                    priorityClass = 'list-group-item-success';
-                    break;
-                default:
-                    priorityClass = 'list-group-item-info';
-            }
-            
-            const countBadge = rec.count ? `<span class="badge bg-secondary">${rec.count}</span>` : '';
-            
-            recommendationsHTML += `
-                <li class="list-group-item ${priorityClass}">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h5 class="mb-1">${rec.title} ${countBadge}</h5>
-                        <small>${rec.priority.charAt(0).toUpperCase() + rec.priority.slice(1)} prioritet</small>
-                    </div>
-                    <p class="mb-1">${rec.description}</p>
-                </li>
-            `;
-        });
-        
-        recommendationsHTML += `</ul>`;
-        recommendationsContainer.innerHTML = recommendationsHTML;
-    }
-    
     // ====================================================
-    // NYA PDF-NEDLADDNINGSFUNKTIONER (TRE RAPPORTTYPER)
+    // MODAL FUNKTIONER
     // ====================================================
     
-    // Hantera PDF-nedladdning för alla rapporttyper
-    document.querySelectorAll('.pdf-download-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            const reportType = this.getAttribute('data-report-type');
-            const originalText = this.innerHTML;
-            
-            // Visa laddningsindikator
-            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar...';
-            
-            // Inaktivera alla dropdown-items
-            document.querySelectorAll('.pdf-download-btn').forEach(btn => {
-                btn.style.pointerEvents = 'none';
-            });
-            
-            // Gör fetch-anrop för att hämta PDF
-            fetch(`/api/download-pdf-report/${reportType}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.blob();
-                })
-                .then(blob => {
-                    // Skapa en URL för blob och ladda ner filen
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    
-                    // Generera filnamn baserat på rapporttyp
-                    const reportNames = {
-                        'basic': 'basic_slutkund',
-                        'medium': 'medium_detaljerad', 
-                        'full': 'fullstandig'
-                    };
-                    
-                    a.download = `sakerheterapport_${reportNames[reportType]}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    
-                    // Visa framgångsmeddelande
-                    showSuccessMessage(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} rapport har laddats ner!`);
-                })
-                .catch(error => {
-                    console.error('Error downloading PDF:', error);
-                    showErrorMessage('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
-                })
-                .finally(() => {
-                    // Återställ alla knappar
-                    document.querySelectorAll('.pdf-download-btn').forEach(btn => {
-                        btn.style.pointerEvents = 'auto';
-                    });
-                    this.innerHTML = originalText;
-                });
-        });
-    });
-    
-    // ====================================================
-    // JSON-NEDLADDNING (BEFINTLIG KOD)
-    // ====================================================
-    
-    // Hantera nedladdning av rapport som JSON
-    const downloadReportBtn = document.getElementById('download-report-btn');
-    if (downloadReportBtn) {
-        downloadReportBtn.addEventListener('click', function() {
-            fetch('/api/download-report/{{ report_id }}')
-                .then(response => response.json())
-                .then(data => {
-                    // Skapa en JSON-fil för nedladdning
-                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-                    const downloadAnchorNode = document.createElement('a');
-                    downloadAnchorNode.setAttribute("href", dataStr);
-                    downloadAnchorNode.setAttribute("download", `pentesting_report_${data.id || '{{ report_id }}'}.json`);
-                    document.body.appendChild(downloadAnchorNode);
-                    downloadAnchorNode.click();
-                    downloadAnchorNode.remove();
-                })
-                .catch(error => {
-                    console.error('Error downloading report:', error);
-                    alert('Kunde inte hämta rapporten. Vänligen försök igen.');
-                });
-        });
-    }
-    
-    // ====================================================
-    // HJÄLPFUNKTIONER FÖR MEDDELANDEN
-    // ====================================================
-    
-    function showSuccessMessage(message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-success alert-dismissible fade show';
-        alertDiv.innerHTML = `
-            <i class="bi bi-check-circle-fill"></i> ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        // Lägg till i början av första card-body vi hittar
-        const cardBody = document.querySelector('.card-body');
-        if (cardBody) {
-            cardBody.insertBefore(alertDiv, cardBody.firstChild);
-        }
-        
-        // Ta bort efter 5 sekunder
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
-    }
-    
-    function showErrorMessage(message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-        alertDiv.innerHTML = `
-            <i class="bi bi-exclamation-triangle-fill"></i> ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        // Lägg till i början av första card-body vi hittar
-        const cardBody = document.querySelector('.card-body');
-        if (cardBody) {
-            cardBody.insertBefore(alertDiv, cardBody.firstChild);
-        }
-        
-        // Ta bort efter 5 sekunder
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
-    }
-    
-    // ====================================================
-    // INITIALISERING
-    // ====================================================
-    
-    // Initiera hämtning av sårbarheter när sidan laddas
-    fetchVulnerabilities();
-
-});
-
-    function showAlertDetails(alertId, alertData = null) {
+    /**
+     * Visa detaljerad information för en specifik sårbarhet
+     */
+    function showAlertDetails(alertId) {
         console.log('showAlertDetails called with ID:', alertId);
-        
-        // Om alert data redan finns, visa det direkt
-        if (alertData) {
-            populateAlertModal(alertData);
-            showModal();
-            return;
-        }
         
         // Visa loading i modal
         showModalLoading();
@@ -510,10 +210,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 showModalError('Kunde inte hämta sårbarhetsdetaljer: ' + error.message);
             });
     }
-
+    
     /**
-    * Visa modal i loading-läge
-    */
+     * Visa modal i loading-läge
+     */
     function showModalLoading() {
         const modal = document.getElementById('alertDetailsModal');
         const modalTitle = document.getElementById('alertDetailsTitle');
@@ -533,10 +233,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const modalInstance = new bootstrap.Modal(modal);
         modalInstance.show();
     }
-
+    
     /**
-    * Visa error i modal
-    */
+     * Visa error i modal
+     */
     function showModalError(errorMessage) {
         const modal = document.getElementById('alertDetailsModal');
         const modalTitle = document.getElementById('alertDetailsTitle');
@@ -556,21 +256,15 @@ document.addEventListener('DOMContentLoaded', function() {
             modalInstance.show();
         }
     }
-
+    
     /**
-    * Visa modal med populerad data
-    */
-    function showModal() {
-        const modal = document.getElementById('alertDetailsModal');
-        const modalInstance = new bootstrap.Modal(modal);
-        modalInstance.show();
-    }
-
-    /**
-    * Fyll i modal med alert-data
-    */
+     * Fyll i modal med alert-data
+     */
     function populateAlertModal(alertData) {
         console.log('Populating modal with data:', alertData);
+        
+        // Spara current alert data för export
+        currentAlertData = alertData;
         
         // Uppdatera modal titel
         const modalTitle = document.getElementById('alertDetailsTitle');
@@ -590,25 +284,60 @@ document.addEventListener('DOMContentLoaded', function() {
         updateModalField('alert-references', formatReferences(references));
         
         // Uppdatera CWE och WASC
-        updateModalField('alert-cwe', alertData.cweid || alertData.cwe || 'Inte tillgänglig');
-        updateModalField('alert-wasc', alertData.wascid || alertData.wasc || 'Inte tillgänglig');
+        updateModalField('alert-cwe', formatCWE(alertData.cweid || alertData.cwe));
+        updateModalField('alert-wasc', formatWASC(alertData.wascid || alertData.wasc));
         
         // Hantera taggar
         const tags = alertData.tags || {};
         updateModalField('alert-tags', formatTags(tags));
         
+        // Teknisk information för accordion
+        updateModalField('alert-id', alertData.id || 'Inte tillgänglig');
+        updateModalField('alert-plugin-id', alertData.pluginId || alertData.plugin_id || 'Inte tillgänglig');
+        updateModalField('alert-method', alertData.method || 'Inte tillgänglig');
+        updateModalField('alert-input-vector', alertData.inputVector || 'Inte tillgänglig');
+        
+        // Evidence (om tillgängligt)
+        if (alertData.evidence) {
+            const evidenceSection = document.getElementById('evidence-section');
+            if (evidenceSection) {
+                evidenceSection.style.display = 'block';
+                updateModalField('alert-evidence', alertData.evidence);
+            }
+        } else {
+            const evidenceSection = document.getElementById('evidence-section');
+            if (evidenceSection) {
+                evidenceSection.style.display = 'none';
+            }
+        }
+        
+        // Request/Response information
+        updateModalField('alert-request-response', formatRequestResponse(alertData));
+        
+        // Andra URLs som påverkas
+        updateModalField('alert-other-urls', formatOtherUrls(alertData.otherInfo || alertData.other_urls));
+        
         // Visa modal
         showModal();
     }
-
+    
     /**
-    * Uppdatera ett fält i modal
-    */
+     * Visa modal
+     */
+    function showModal() {
+        const modal = document.getElementById('alertDetailsModal');
+        const modalInstance = new bootstrap.Modal(modal);
+        modalInstance.show();
+    }
+    
+    /**
+     * Uppdatera ett fält i modal
+     */
     function updateModalField(fieldId, content, styleClass = '') {
         const element = document.getElementById(fieldId);
         if (element) {
             // Rensa tidigare klasser
-            element.className = 'p-2 bg-light';
+            element.className = 'p-2 bg-light rounded border';
             
             // Lägg till style-klass om specificerad
             if (styleClass === 'code-style') {
@@ -622,10 +351,10 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn(`Element with ID '${fieldId}' not found`);
         }
     }
-
+    
     /**
-    * Formatera innehåll för visning
-    */
+     * Formatera innehåll för visning
+     */
     function formatContent(content) {
         if (!content || content === 'N/A') {
             return '<em class="text-muted">Inte tillgänglig</em>';
@@ -635,10 +364,46 @@ document.addEventListener('DOMContentLoaded', function() {
         const escaped = escapeHtml(content);
         return escaped.replace(/\n/g, '<br>');
     }
-
+    
     /**
-    * Formatera referenser
-    */
+     * Formatera CWE-information med länkar
+     */
+    function formatCWE(cweId) {
+        if (!cweId || cweId === 'N/A') {
+            return '<em class="text-muted">Inte tillgänglig</em>';
+        }
+        
+        const cweNumber = cweId.toString().replace(/[^0-9]/g, '');
+        if (cweNumber) {
+            return `<a href="https://cwe.mitre.org/data/definitions/${cweNumber}.html" target="_blank" class="text-decoration-none">
+                CWE-${cweNumber} <i class="bi bi-box-arrow-up-right"></i>
+            </a>`;
+        }
+        
+        return escapeHtml(cweId);
+    }
+    
+    /**
+     * Formatera WASC-information med länkar
+     */
+    function formatWASC(wascId) {
+        if (!wascId || wascId === 'N/A') {
+            return '<em class="text-muted">Inte tillgänglig</em>';
+        }
+        
+        const wascNumber = wascId.toString().replace(/[^0-9]/g, '');
+        if (wascNumber) {
+            return `<a href="http://projects.webappsec.org/w/page/13246978/Threat%20Classification%20Reference%20Grid" target="_blank" class="text-decoration-none">
+                WASC-${wascNumber} <i class="bi bi-box-arrow-up-right"></i>
+            </a>`;
+        }
+        
+        return escapeHtml(wascId);
+    }
+    
+    /**
+     * Formatera referenser
+     */
     function formatReferences(references) {
         if (!references || references === 'N/A') {
             return '<em class="text-muted">Inga referenser tillgängliga</em>';
@@ -657,10 +422,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return formattedLines.join('<br>');
     }
-
+    
     /**
-    * Formatera taggar
-    */
+     * Formatera taggar
+     */
     function formatTags(tags) {
         if (!tags || Object.keys(tags).length === 0) {
             return '<em class="text-muted">Inga taggar tillgängliga</em>';
@@ -672,44 +437,93 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return tagBadges;
     }
-
+    
     /**
-    * Få CSS-klass för risk-badge
-    */
+     * Formatera request/response information
+     */
+    function formatRequestResponse(alertData) {
+        let html = '';
+        
+        if (alertData.messageId) {
+            html += `<div class="mb-2"><strong>Message ID:</strong> ${alertData.messageId}</div>`;
+        }
+        
+        if (alertData.requestMethod) {
+            html += `<div class="mb-2"><strong>Request Method:</strong> <code>${alertData.requestMethod}</code></div>`;
+        }
+        
+        if (alertData.requestUri) {
+            html += `<div class="mb-2"><strong>Request URI:</strong> <code class="text-break">${escapeHtml(alertData.requestUri)}</code></div>`;
+        }
+        
+        if (alertData.responseStatusCode) {
+            html += `<div class="mb-2"><strong>Response Status:</strong> <code>${alertData.responseStatusCode}</code></div>`;
+        }
+        
+        if (!html) {
+            html = '<em class="text-muted">Ingen request/response information tillgänglig</em>';
+        }
+        
+        return html;
+    }
+    
+    /**
+     * Formatera andra URLs
+     */
+    function formatOtherUrls(otherUrls) {
+        if (!otherUrls || otherUrls.length === 0) {
+            return '<em class="text-muted">Inga andra URLs påverkade</em>';
+        }
+        
+        if (typeof otherUrls === 'string') {
+            otherUrls = otherUrls.split('\n').filter(url => url.trim());
+        }
+        
+        if (Array.isArray(otherUrls)) {
+            const urlList = otherUrls.map(url => `<div class="mb-1"><code class="text-break">${escapeHtml(url)}</code></div>`).join('');
+            return urlList;
+        }
+        
+        return '<em class="text-muted">Kunde inte formatera URL-information</em>';
+    }
+    
+    /**
+     * Få CSS-klass för risk-badge
+     */
     function getRiskBadgeClass(risk) {
         switch (risk?.toLowerCase()) {
             case 'high':
-                return 'badge-bg-danger text-white';
+                return 'bg-danger text-white';
             case 'medium':
-                return 'badge-bg-warning text-dark';
+                return 'bg-warning text-dark';
             case 'low':
-                return 'badge-bg-info text-white';
+                return 'bg-info text-white';
             case 'informational':
-                return 'badge-bg-secondary text-white';
+                return 'bg-secondary text-white';
             default:
-                return 'badge-bg-secondary text-white';
+                return 'bg-secondary text-white';
         }
     }
-
+    
     /**
-    * Få CSS-klass för confidence-badge
-    */
+     * Få CSS-klass för confidence-badge
+     */
     function getConfidenceBadgeClass(confidence) {
         switch (confidence?.toLowerCase()) {
             case 'high':
-                return 'badge-bg-success text-white';
+                return 'bg-success text-white';
             case 'medium':
-                return 'badge-bg-warning text-dark';
+                return 'bg-warning text-dark';
             case 'low':
-                return 'badge-bg-light text-dark';
+                return 'bg-light text-dark';
             default:
-                return 'badge-bg-secondary text-white';
+                return 'bg-secondary text-white';
         }
     }
-
+    
     /**
-    * Escape HTML för säkerhet
-    */
+     * Escape HTML för säkerhet
+     */
     function escapeHtml(text) {
         const map = {
             '&': '&amp;',
@@ -721,200 +535,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
     }
-
-    // Förbättra befintlig generateAlertDetails-funktion för att skicka alert-objektet
-    // Denna funktion bör uppdateras i din befintliga kod:
-    function generateAlertDetailsImproved(alerts) {
-        let html = '<div class="alert-instances">';
+    
+    // ====================================================
+    // EXPORT/KOPIERA FUNKTIONER
+    // ====================================================
+    
+    /**
+     * Kopiera alert-detaljer till clipboard
+     */
+    function copyAlertDetails() {
+        const alertData = currentAlertData;
+        if (!alertData) {
+            alert('Ingen alert-data tillgänglig för kopiering');
+            return;
+        }
         
-        alerts.forEach((alert, index) => {
-            if (index >= 5) { // Begränsa till 5 instanser
-                html += `<p class="text-muted">...och ${alerts.length - 5} fler instanser</p>`;
-                return;
-            }
-            
-            html += `
-                <div class="alert-instance mb-3 p-3 border rounded">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <strong>URL:</strong> <code class="text-break">${alert.url || 'N/A'}</code>
-                        </div>
-                        <div class="col-md-4">
-                            <span class="badge bg-${getRiskColorClass(alert.risk)} text-white">${alert.risk || 'Unknown'}</span>
-                            <span class="badge bg-info ms-1">${alert.confidence || 'Unknown'}</span>
-                        </div>
-                    </div>
-                    ${alert.param ? `<div class="mt-2"><strong>Parameter:</strong> <code>${alert.param}</code></div>` : ''}
-                    ${alert.description ? `<div class="mt-2"><small>${alert.description.substring(0, 200)}...</small></div>` : ''}
-                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="showAlertDetails('${alert.id}', ${JSON.stringify(alert).replace(/'/g, '\\\'')})">
-                        Visa detaljer
-                    </button>
-                </div>
-            `;
-        });
-        
-        html += '</div>';
-        return html;
-    }
-
-
-
-/**
- * Utökad populateAlertModal för att hantera all teknisk information
- */
-function populateAlertModalExtended(alertData) {
-    console.log('Populating extended modal with data:', alertData);
-    
-    // Uppdatera modal titel
-    const modalTitle = document.getElementById('alertDetailsTitle');
-    modalTitle.textContent = alertData.name || 'Sårbarhetsdetaljer';
-    
-    // Grundläggande fält
-    updateModalField('alert-description', alertData.description || 'Ingen beskrivning tillgänglig');
-    updateModalField('alert-risk', alertData.risk || 'Okänd', getRiskBadgeClass(alertData.risk));
-    updateModalField('alert-confidence', alertData.confidence || 'Okänd', getConfidenceBadgeClass(alertData.confidence));
-    updateModalField('alert-url', alertData.url || 'Ingen URL tillgänglig', 'code-style');
-    updateModalField('alert-parameter', alertData.param || alertData.parameter || 'Ingen parameter');
-    updateModalField('alert-attack', alertData.attack || 'Ingen attack-information');
-    updateModalField('alert-solution', alertData.solution || 'Inga åtgärdsförslag tillgängliga');
-    
-    // Referenser
-    const references = alertData.reference || alertData.references || '';
-    updateModalField('alert-references', formatReferences(references));
-    
-    // Teknisk information
-    updateModalField('alert-cwe', formatCWE(alertData.cweid || alertData.cwe));
-    updateModalField('alert-wasc', formatWASC(alertData.wascid || alertData.wasc));
-    
-    // Taggar
-    const tags = alertData.tags || {};
-    updateModalField('alert-tags', formatTags(tags));
-    
-    // Teknisk information för accordion
-    updateModalField('alert-id', alertData.id || 'Inte tillgänglig');
-    updateModalField('alert-plugin-id', alertData.pluginId || alertData.plugin_id || 'Inte tillgänglig');
-    updateModalField('alert-method', alertData.method || 'Inte tillgänglig');
-    updateModalField('alert-input-vector', alertData.inputVector || 'Inte tillgänglig');
-    
-    // Evidence (om tillgängligt)
-    if (alertData.evidence) {
-        const evidenceSection = document.getElementById('evidence-section');
-        evidenceSection.style.display = 'block';
-        updateModalField('alert-evidence', alertData.evidence);
-    } else {
-        const evidenceSection = document.getElementById('evidence-section');
-        evidenceSection.style.display = 'none';
-    }
-    
-    // Request/Response information
-    updateModalField('alert-request-response', formatRequestResponse(alertData));
-    
-    // Andra URLs som påverkas
-    updateModalField('alert-other-urls', formatOtherUrls(alertData.otherInfo || alertData.other_urls));
-    
-    // Spara current alert data för export
-    window.currentAlertData = alertData;
-    
-    // Visa modal
-    showModal();
-}
-
-/**
- * Formatera CWE-information med länkar
- */
-function formatCWE(cweId) {
-    if (!cweId || cweId === 'N/A') {
-        return '<em class="text-muted">Inte tillgänglig</em>';
-    }
-    
-    const cweNumber = cweId.toString().replace(/[^0-9]/g, '');
-    if (cweNumber) {
-        return `<a href="https://cwe.mitre.org/data/definitions/${cweNumber}.html" target="_blank" class="text-decoration-none">
-            CWE-${cweNumber} <i class="bi bi-box-arrow-up-right"></i>
-        </a>`;
-    }
-    
-    return escapeHtml(cweId);
-}
-
-/**
- * Formatera WASC-information med länkar
- */
-function formatWASC(wascId) {
-    if (!wascId || wascId === 'N/A') {
-        return '<em class="text-muted">Inte tillgänglig</em>';
-    }
-    
-    const wascNumber = wascId.toString().replace(/[^0-9]/g, '');
-    if (wascNumber) {
-        return `<a href="http://projects.webappsec.org/w/page/13246978/Threat%20Classification%20Reference%20Grid" target="_blank" class="text-decoration-none">
-            WASC-${wascNumber} <i class="bi bi-box-arrow-up-right"></i>
-        </a>`;
-    }
-    
-    return escapeHtml(wascId);
-}
-
-/**
- * Formatera request/response information
- */
-function formatRequestResponse(alertData) {
-    let html = '';
-    
-    if (alertData.messageId) {
-        html += `<div class="mb-2"><strong>Message ID:</strong> ${alertData.messageId}</div>`;
-    }
-    
-    if (alertData.requestMethod) {
-        html += `<div class="mb-2"><strong>Request Method:</strong> <code>${alertData.requestMethod}</code></div>`;
-    }
-    
-    if (alertData.requestUri) {
-        html += `<div class="mb-2"><strong>Request URI:</strong> <code class="text-break">${escapeHtml(alertData.requestUri)}</code></div>`;
-    }
-    
-    if (alertData.responseStatusCode) {
-        html += `<div class="mb-2"><strong>Response Status:</strong> <code>${alertData.responseStatusCode}</code></div>`;
-    }
-    
-    if (!html) {
-        html = '<em class="text-muted">Ingen request/response information tillgänglig</em>';
-    }
-    
-    return html;
-}
-
-/**
- * Formatera andra URLs
- */
-function formatOtherUrls(otherUrls) {
-    if (!otherUrls || otherUrls.length === 0) {
-        return '<em class="text-muted">Inga andra URLs påverkade</em>';
-    }
-    
-    if (typeof otherUrls === 'string') {
-        otherUrls = otherUrls.split('\n').filter(url => url.trim());
-    }
-    
-    if (Array.isArray(otherUrls)) {
-        const urlList = otherUrls.map(url => `<div class="mb-1"><code class="text-break">${escapeHtml(url)}</code></div>`).join('');
-        return urlList;
-    }
-    
-    return '<em class="text-muted">Kunde inte formatera URL-information</em>';
-}
-
-/**
- * Kopiera alert-detaljer till clipboard
- */
-function copyAlertDetails() {
-    const alertData = window.currentAlertData;
-    if (!alertData) {
-        alert('Ingen alert-data tillgänglig för kopiering');
-        return;
-    }
-    
-    const textContent = `
+        const textContent = `
 SÅRBARHETSDETALJER
 ==================
 
@@ -944,130 +580,365 @@ ${alertData.reference || alertData.references || 'Inga referenser tillgängliga'
 
 Genererad: ${new Date().toLocaleString('sv-SE')}
 `;
-    
-    navigator.clipboard.writeText(textContent).then(() => {
-        // Visa success-meddelande
-        showTemporaryMessage('Sårbarhetsdetaljer kopierade till clipboard!', 'success');
-    }).catch(err => {
-        console.error('Kunde inte kopiera text: ', err);
-        showTemporaryMessage('Fel vid kopiering till clipboard', 'error');
-    });
-}
-
-/**
- * Exportera alert-detaljer som JSON
- */
-function exportAlertDetails() {
-    const alertData = window.currentAlertData;
-    if (!alertData) {
-        alert('Ingen alert-data tillgänglig för export');
-        return;
+        
+        navigator.clipboard.writeText(textContent).then(() => {
+            showTemporaryMessage('Sårbarhetsdetaljer kopierade till clipboard!', 'success');
+        }).catch(err => {
+            console.error('Kunde inte kopiera text: ', err);
+            showTemporaryMessage('Fel vid kopiering till clipboard', 'error');
+        });
     }
     
-    const exportData = {
-        ...alertData,
-        exportedAt: new Date().toISOString(),
-        exportedBy: 'Web PEN Testing Tool'
-    };
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
-    const exportFileDefaultName = `alert_${alertData.id || 'unknown'}_${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    
-    showTemporaryMessage('Alert-detaljer exporterade!', 'success');
-}
-
-/**
- * Visa tillfälligt meddelande
- */
-function showTemporaryMessage(message, type = 'info') {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
-    alertDiv.innerHTML = `
-        <i class="bi bi-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'}-fill"></i>
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alertDiv);
-    
-    // Ta bort efter 3 sekunder
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 3000);
-}
-
-/**
- * Uppdaterad generateAlertDetails som använder den nya funktionen
- */
-function generateAlertDetailsWithModal(alerts) {
-    let html = '<div class="alert-instances">';
-    
-    alerts.forEach((alert, index) => {
-        if (index >= 5) { // Begränsa till 5 instanser
-            html += `<p class="text-muted">...och ${alerts.length - 5} fler instanser</p>`;
+    /**
+     * Exportera alert-detaljer som JSON
+     */
+    function exportAlertDetails() {
+        const alertData = currentAlertData;
+        if (!alertData) {
+            alert('Ingen alert-data tillgänglig för export');
             return;
         }
         
-        // Skapa en säker JSON-string för onclick
-        const alertJson = JSON.stringify(alert).replace(/"/g, '&quot;');
+        const exportData = {
+            ...alertData,
+            exportedAt: new Date().toISOString(),
+            exportedBy: 'Web PEN Testing Tool'
+        };
         
-        html += `
-            <div class="alert-instance mb-3 p-3 border rounded">
-                <div class="row">
-                    <div class="col-md-8">
-                        <strong>URL:</strong> <code class="text-break">${escapeHtml(alert.url || 'N/A')}</code>
-                    </div>
-                    <div class="col-md-4">
-                        <span class="badge bg-${getRiskColorClass(alert.risk)} text-white">${alert.risk || 'Unknown'}</span>
-                        <span class="badge bg-info ms-1">${alert.confidence || 'Unknown'}</span>
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = `alert_${alertData.id || 'unknown'}_${new Date().toISOString().split('T')[0]}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+        
+        showTemporaryMessage('Alert-detaljer exporterade!', 'success');
+    }
+    
+    /**
+     * Visa tillfälligt meddelande
+     */
+    function showTemporaryMessage(message, type = 'info') {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+        alertDiv.innerHTML = `
+            <i class="bi bi-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'}-fill"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(alertDiv);
+        
+        // Ta bort efter 3 sekunder
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 3000);
+    }
+    
+    // ====================================================
+    // HJÄLPFUNKTIONER
+    // ====================================================
+    
+    function safeUpdateElement(id, content) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = content;
+        } else {
+            console.warn(`Element with id '${id}' not found`);
+        }
+    }
+    
+    function hideLoadingMessage() {
+        const loadingElement = document.getElementById('alerts-loading');
+        if (loadingElement) {
+            loadingElement.classList.add('d-none');
+        }
+    }
+    
+    function showErrorInRecommendations(message) {
+        const recommendationsContainer = document.getElementById('recommendations-container');
+        if (recommendationsContainer) {
+            recommendationsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> ${message}
+                </div>
+            `;
+        }
+    }
+    
+    function showSuccessMessage(message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success alert-dismissible fade show';
+        alertDiv.innerHTML = `
+            <i class="bi bi-check-circle-fill"></i> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const cardBody = document.querySelector('.card-body');
+        if (cardBody) {
+            cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        }
+        
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+    
+    function showErrorMessage(message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+        alertDiv.innerHTML = `
+            <i class="bi bi-exclamation-triangle-fill"></i> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const cardBody = document.querySelector('.card-body');
+        if (cardBody) {
+            cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        }
+        
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+    
+    function generateRecommendations(data) {
+        const recommendationsContainer = document.getElementById('recommendations-container');
+        if (!recommendationsContainer) {
+            console.warn('Recommendations container not found');
+            return;
+        }
+        
+        const alertsByRisk = data.alerts_by_risk || {};
+        
+        let prioritizedRecommendations = [];
+        
+        // Hög prioritet
+        if (alertsByRisk.highAlerts && alertsByRisk.highAlerts.length > 0) {
+            const sqlInjectionAlerts = alertsByRisk.highAlerts.filter(alert => 
+                alert.name && alert.name.toLowerCase().includes('sql injection'));
+            
+            if (sqlInjectionAlerts.length > 0) {
+                prioritizedRecommendations.push({
+                    title: 'Åtgärda SQL Injection sårbarheter OMEDELBART',
+                    description: 'SQL Injection är en kritisk sårbarhet som kan leda till databaskompromiss. Använd parameteriserade queries och validera all input.',
+                    priority: 'danger',
+                    icon: 'bi-shield-exclamation'
+                });
+            }
+            
+            prioritizedRecommendations.push({
+                title: 'Åtgärda högrisksårbarheter',
+                description: `${alertsByRisk.highAlerts.length} högrisksårbarheter hittades. Dessa kräver omedelbar uppmärksamhet.`,
+                priority: 'danger',
+                icon: 'bi-exclamation-triangle-fill'
+            });
+        }
+        
+        // Medium prioritet
+        if (alertsByRisk.mediumAlerts && alertsByRisk.mediumAlerts.length > 0) {
+            prioritizedRecommendations.push({
+                title: 'Granska medelrisksårbarheter',
+                description: `${alertsByRisk.mediumAlerts.length} medelrisksårbarheter hittades. Planera åtgärder inom kort.`,
+                priority: 'warning',
+                icon: 'bi-exclamation-circle'
+            });
+        }
+        
+        // Låg prioritet
+        if (alertsByRisk.lowAlerts && alertsByRisk.lowAlerts.length > 0) {
+            prioritizedRecommendations.push({
+                title: 'Åtgärda lågriskssårbarheter',
+                description: `${alertsByRisk.lowAlerts.length} lågriskssårbarheter hittades. Åtgärda vid nästa underhållsperiod.`,
+                priority: 'info',
+                icon: 'bi-info-circle'
+            });
+        }
+        
+        // Allmänna rekommendationer
+        prioritizedRecommendations.push({
+            title: 'Allmänna säkerhetsrekommendationer',
+            description: 'Implementera säkerhetsheaders, använd HTTPS, uppdatera regelbundet, och utför penetrationstester kontinuerligt.',
+            priority: 'success',
+            icon: 'bi-shield-check'
+        });
+        
+        // Bygg HTML
+        let html = '<div class="recommendations-list">';
+        prioritizedRecommendations.forEach((rec, index) => {
+            html += `
+                <div class="alert alert-${rec.priority} border-start border-${rec.priority === 'danger' ? 'danger' : rec.priority === 'warning' ? 'warning' : rec.priority === 'info' ? 'info' : 'success'} border-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi ${rec.icon} me-2"></i>
+                        <div>
+                            <h6 class="mb-1">${rec.title}</h6>
+                            <p class="mb-0">${rec.description}</p>
+                        </div>
                     </div>
                 </div>
-                ${alert.param ? `<div class="mt-2"><strong>Parameter:</strong> <code>${escapeHtml(alert.param)}</code></div>` : ''}
-                ${alert.description ? `<div class="mt-2"><small>${escapeHtml(alert.description.substring(0, 200))}...</small></div>` : ''}
-                <button class="btn btn-sm btn-outline-primary mt-2" onclick='showAlertDetailsFromData(${alertJson})'>
-                    <i class="bi bi-info-circle me-1"></i>Visa detaljer
-                </button>
-            </div>
-        `;
-    });
-    
-    html += '</div>';
-    return html;
-}
-
-/**
- * Hjälpfunktion för att visa alert-detaljer från JSON-data
- */
-function showAlertDetailsFromData(alertData) {
-    if (alertData.id) {
-        // Om vi har ett ID, hämta full data från API
-        showAlertDetails(alertData.id, alertData);
-    } else {
-        // Annars, använd den data vi har
-        populateAlertModalExtended(alertData);
+            `;
+        });
+        html += '</div>';
+        
+        recommendationsContainer.innerHTML = html;
     }
-}
-
-// Överskugga den ursprungliga populateAlertModal med den utökade versionen
-window.populateAlertModal = populateAlertModalExtended;
-
-// Lägg till händelselyssnare för att hantera modal-stängning
-document.addEventListener('DOMContentLoaded', function() {
+    
+    // ====================================================
+    // GLOBALA FUNKTIONER (för onclick handlers)
+    // ====================================================
+    
+    // Gör funktioner globala så de kan anropas från HTML
+    window.showAlertDetails = showAlertDetails;
+    window.copyAlertDetails = copyAlertDetails;
+    window.exportAlertDetails = exportAlertDetails;
+    
+    // ====================================================
+    // INITIALIZATION
+    // ====================================================
+    
+    // Starta hämtning av sårbarhetsdata
+    fetchVulnerabilities();
+    
+    // Lägg till händelselyssnare för modal-stängning
     const alertModal = document.getElementById('alertDetailsModal');
     if (alertModal) {
         alertModal.addEventListener('hidden.bs.modal', function() {
-            // Rensa saved alert data när modal stängs
-            window.currentAlertData = null;
+            currentAlertData = null;
         });
+    }
+    
+    // PDF-nedladdning hantering
+    document.querySelectorAll('.pdf-download-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const reportType = this.dataset.reportType;
+            const originalText = this.innerHTML;
+            
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar PDF...';
+            this.disabled = true;
+            
+            fetch(`/api/download-report-pdf/${reportType}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    
+                    const reportNames = {
+                        'basic': 'basic_slutkund',
+                        'medium': 'medium_detaljerad', 
+                        'full': 'fullstandig'
+                    };
+                    
+                    a.download = `sakerheterapport_${reportNames[reportType]}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    
+                    showSuccessMessage(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} rapport har laddats ner!`);
+                })
+                .catch(error => {
+                    console.error('Error downloading PDF:', error);
+                    showErrorMessage('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
+                })
+                .finally(() => {
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                });
+        });
+    });
+    
+    // JSON-nedladdning hantering
+    const downloadReportBtn = document.getElementById('download-report-btn');
+    if (downloadReportBtn) {
+        downloadReportBtn.addEventListener('click', function() {
+            // Hämta rapport-ID från template variabler
+            const reportId = window.REPORT_CONFIG ? window.REPORT_CONFIG.report_id : 'unknown';
+            
+            fetch(`/api/download-report/${reportId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", `pentesting_report_${data.id || reportId}.json`);
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                })
+                .catch(error => {
+                    console.error('Error downloading report:', error);
+                    alert('Kunde inte hämta rapporten. Vänligen försök igen.');
+                });
+        });
+    }
+    
+    // Debug-funktioner (om debug-läge är aktiverat)
+    if (window.REPORT_CONFIG && window.REPORT_CONFIG.debug_mode) {
+        console.info('Debug mode enabled');
+        console.info('Target URL:', window.REPORT_CONFIG.target_url);
+        console.info('Report ID:', window.REPORT_CONFIG.report_id);
+        
+        // Debug-knappar
+        const debugApiBtn = document.getElementById('debug-api-btn');
+        if (debugApiBtn) {
+            debugApiBtn.addEventListener('click', function() {
+                fetch('/debug-zap-api')
+                    .then(response => response.json())
+                    .then(data => {
+                        const debugJson = document.getElementById('debug-json');
+                        if (debugJson) {
+                            debugJson.textContent = JSON.stringify(data, null, 2);
+                        }
+                        const debugResults = document.getElementById('debug-results');
+                        if (debugResults) {
+                            debugResults.classList.remove('d-none');
+                        }
+                    });
+            });
+        }
+        
+        const debugRawJsonBtn = document.getElementById('debug-raw-json-btn');
+        if (debugRawJsonBtn) {
+            debugRawJsonBtn.addEventListener('click', function() {
+                fetch('/debug-zap-api')
+                    .then(response => response.json())
+                    .then(data => {
+                        const debugJson = document.getElementById('debug-json');
+                        if (debugJson) {
+                            debugJson.textContent = JSON.stringify(data, null, 2);
+                        }
+                        const debugResults = document.getElementById('debug-results');
+                        if (debugResults) {
+                            debugResults.classList.remove('d-none');
+                        }
+                    })
+                    .catch(error => {
+                        const debugJson = document.getElementById('debug-json');
+                        if (debugJson) {
+                            debugJson.textContent = 'Error: ' + error.message;
+                        }
+                        const debugResults = document.getElementById('debug-results');
+                        if (debugResults) {
+                            debugResults.classList.remove('d-none');
+                        }
+                    });
+            });
+        }
     }
 });

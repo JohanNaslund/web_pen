@@ -242,6 +242,7 @@
 </div>
 </div>
 <!-- Modal för sårbarhetsdetaljer -->
+<!-- Modal för sårbarhetsdetaljer -->
 <div class="modal fade" id="alertDetailsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -415,14 +416,12 @@
         </div>
     </div>
 </div>
-
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/report.js') }}"></script>
 <script>
-// Behåll bara detta för att sätta template-variabler
+// Template-variabler som JavaScript behöver
 document.addEventListener('DOMContentLoaded', function() {
-    // Template-variabler som JavaScript behöver
     window.REPORT_CONFIG = {
         target_url: '{{ target_url }}',
         report_id: '{{ report_id }}',
