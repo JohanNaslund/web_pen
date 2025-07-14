@@ -3325,7 +3325,7 @@ def generate_pdf_from_html_with_type(html_content, report_type):
             'basic': """
                 @page {
                     size: A4;
-                    margin: 2cm;
+                    margin: 1cm;
                     @top-center {
                         content: "Säkerhetsrapport - Basic";
                         font-size: 10pt;
@@ -3405,7 +3405,7 @@ def generate_pdf_from_html_with_type(html_content, report_type):
             'medium': """
                 @page {
                     size: A4;
-                    margin: 2cm;
+                    margin: 1cm;
                     @top-center {
                         content: "Säkerhetsrapport - Medium";
                         font-size: 10pt;
@@ -3473,7 +3473,7 @@ def generate_pdf_from_html_with_type(html_content, report_type):
             'full': """
                 @page {
                     size: A4;
-                    margin: 1.2cm;
+                    margin: 0.6cm;
                     @top-center {
                         content: "Fullständig Säkerhetsrapport";
                         font-size: 9pt;
@@ -3633,7 +3633,10 @@ def generate_pdf_from_html_with_type(html_content, report_type):
         
         # Generera PDF
         html_doc = HTML(string=html_content)
-        pdf_bytes = html_doc.write_pdf(stylesheets=[css])
+        pdf_bytes = html_doc.write_pdf(
+            stylesheets=[css],
+            optimize_images=True,
+            pdf_version='1.4')
         
         return pdf_bytes
         
