@@ -243,619 +243,181 @@
 </div>
 <!-- Modal för sårbarhetsdetaljer -->
 <div class="modal fade" id="alertDetailsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="alertDetailsTitle">Sårbarhetsdetaljer</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Stäng"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <h6>Beskrivning</h6>
-                    <div id="alert-description" class="p-2 bg-light"></div>
+                <!-- Beskrivning -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-primary">
+                        <i class="bi bi-info-circle-fill me-2"></i>Beskrivning
+                    </h6>
+                    <div id="alert-description" class="p-3 bg-light rounded border"></div>
                 </div>
-                <div class="row">
+                
+                <!-- Risk och Konfidensgrad -->
+                <div class="row mb-4">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <h6>Risk</h6>
-                            <div id="alert-risk" class="p-2 bg-light"></div>
+                            <h6 class="fw-bold text-danger">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>Risk
+                            </h6>
+                            <div id="alert-risk" class="p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <h6>Konfidensgrad</h6>
-                            <div id="alert-confidence" class="p-2 bg-light"></div>
+                            <h6 class="fw-bold text-info">
+                                <i class="bi bi-speedometer2 me-2"></i>Konfidensgrad
+                            </h6>
+                            <div id="alert-confidence" class="p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <h6>URL</h6>
-                    <div id="alert-url" class="p-2 bg-light"></div>
+                
+                <!-- URL och Parameter -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-dark">
+                        <i class="bi bi-link-45deg me-2"></i>URL
+                    </h6>
+                    <div id="alert-url" class="p-2 bg-light rounded border"></div>
                 </div>
-                <div class="row">
+                
+                <div class="row mb-4">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <h6>Parameter</h6>
-                            <div id="alert-parameter" class="p-2 bg-light"></div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <h6>Attack</h6>
-                            <div id="alert-attack" class="p-2 bg-light"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <h6>Åtgärdsförslag</h6>
-                    <div id="alert-solution" class="p-2 bg-light"></div>
-                </div>
-                <div class="mb-3">
-                    <h6>Referenser</h6>
-                    <div id="alert-references" class="p-2 bg-light"></div>
-                </div>
-                <!-- Nya fält för detaljerad information -->
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <h6>CWE</h6>
-                            <div id="alert-cwe" class="p-2 bg-light"></div>
+                            <h6 class="fw-bold text-warning">
+                                <i class="bi bi-gear-fill me-2"></i>Parameter
+                            </h6>
+                            <div id="alert-parameter" class="p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <h6>WASC</h6>
-                            <div id="alert-wasc" class="p-2 bg-light"></div>
+                            <h6 class="fw-bold text-danger">
+                                <i class="bi bi-shield-exclamation me-2"></i>Attack
+                            </h6>
+                            <div id="alert-attack" class="p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <h6>Taggar</h6>
-                    <div id="alert-tags" class="p-2 bg-light"></div>
+                
+                <!-- Åtgärdsförslag -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-success">
+                        <i class="bi bi-tools me-2"></i>Åtgärdsförslag
+                    </h6>
+                    <div id="alert-solution" class="p-3 bg-light rounded border"></div>
+                </div>
+                
+                <!-- Referenser -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-info">
+                        <i class="bi bi-link-45deg me-2"></i>Referenser & ZAP-länkar
+                    </h6>
+                    <div id="alert-references" class="p-3 bg-light rounded border"></div>
+                </div>
+                
+                <!-- Teknisk information -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <h6 class="fw-bold text-secondary">
+                                <i class="bi bi-code-square me-2"></i>CWE (Common Weakness Enumeration)
+                            </h6>
+                            <div id="alert-cwe" class="p-2 bg-light rounded border"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <h6 class="fw-bold text-secondary">
+                                <i class="bi bi-shield-check me-2"></i>WASC (Web Application Security Consortium)
+                            </h6>
+                            <div id="alert-wasc" class="p-2 bg-light rounded border"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Taggar -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-secondary">
+                        <i class="bi bi-tags-fill me-2"></i>Taggar
+                    </h6>
+                    <div id="alert-tags" class="p-2 bg-light rounded border"></div>
+                </div>
+                
+                <!-- Bevis och Evidence (om tillgängligt) -->
+                <div class="mb-4" id="evidence-section" style="display: none;">
+                    <h6 class="fw-bold text-warning">
+                        <i class="bi bi-file-earmark-text me-2"></i>Bevis/Evidence
+                    </h6>
+                    <div id="alert-evidence" class="p-3 bg-light rounded border"></div>
+                </div>
+                
+                <!-- Ytterligare teknisk information för teknikern -->
+                <div class="accordion" id="technicalAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="technicalHeading">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#technicalCollapse" aria-expanded="false" aria-controls="technicalCollapse">
+                                <i class="bi bi-wrench me-2"></i>
+                                <strong>Teknisk information för åtgärdande</strong>
+                            </button>
+                        </h2>
+                        <div id="technicalCollapse" class="accordion-collapse collapse" aria-labelledby="technicalHeading" data-bs-parent="#technicalAccordion">
+                            <div class="accordion-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Alert ID</h6>
+                                        <div id="alert-id" class="p-2 bg-light rounded border mb-3"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Plugin ID</h6>
+                                        <div id="alert-plugin-id" class="p-2 bg-light rounded border mb-3"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Metod</h6>
+                                        <div id="alert-method" class="p-2 bg-light rounded border mb-3"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-bold">Input Vector</h6>
+                                        <div id="alert-input-vector" class="p-2 bg-light rounded border mb-3"></div>
+                                    </div>
+                                </div>
+                                
+                                <h6 class="fw-bold">Request/Response Information</h6>
+                                <div id="alert-request-response" class="p-2 bg-light rounded border mb-3"></div>
+                                
+                                <h6 class="fw-bold">Andra URLs som påverkas</h6>
+                                <div id="alert-other-urls" class="p-2 bg-light rounded border"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+            
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Stäng</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-2"></i>Stäng
+                </button>
+                <button type="button" class="btn btn-primary" onclick="copyAlertDetails()">
+                    <i class="bi bi-clipboard me-2"></i>Kopiera detaljer
+                </button>
+                <button type="button" class="btn btn-info" onclick="exportAlertDetails()">
+                    <i class="bi bi-download me-2"></i>Exportera
+                </button>
             </div>
         </div>
     </div>
 </div>
+
 {% endblock %}
 {% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    
-    // ====================================================
-    // FUNKTIONER FÖR SÅRBARHETSDATA (BEFINTLIG KOD)
-    // ====================================================
-    
-    function fetchVulnerabilities() {
-        console.log('Fetching vulnerabilities...');
-        fetch('/api/zap-alerts-by-risk')
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    console.error('API error:', data.error);
-                    // Uppdatera bara räknarna vid fel
-                    updateCounts(0, 0, 0, 0);
-                    showErrorInRecommendations('Error loading vulnerabilities: ' + data.error);
-                    return;
-                }
-                
-                console.log('Vulnerabilities fetched successfully');
-                updateCounts(data);
-                generateRecommendations(data);
-                
-                // Dölj laddningsmeddelande och visa framgång
-                hideLoadingMessage();
-            })
-            .catch(error => {
-                console.error('Error fetching vulnerabilities:', error);
-                updateCounts(0, 0, 0, 0);
-                showErrorInRecommendations('Error loading vulnerabilities. Please try again.');
-                hideLoadingMessage();
-            });
-    }
-    
-    function updateCounts(data) {
-        // Säkert sätt att uppdatera räknare
-        const alertsByRisk = data.alerts_by_risk || {};
-        
-        const highCount = alertsByRisk.highAlerts ? alertsByRisk.highAlerts.length : 0;
-        const mediumCount = alertsByRisk.mediumAlerts ? alertsByRisk.mediumAlerts.length : 0;
-        const lowCount = alertsByRisk.lowAlerts ? alertsByRisk.lowAlerts.length : 0;
-        const infoCount = alertsByRisk.infoAlerts ? alertsByRisk.infoAlerts.length : 0;
-        
-        // FIXAT: Uppdatera räknare med korrekta ID:n
-        safeUpdateElement('high-risk-badge', highCount);
-        safeUpdateElement('medium-risk-badge', mediumCount);
-        safeUpdateElement('low-risk-badge', lowCount);
-        safeUpdateElement('info-risk-badge', infoCount);
-        
-        // Uppdatera även summary cards om de finns
-        safeUpdateElement('high-risk-count', highCount);
-        safeUpdateElement('medium-risk-count', mediumCount);
-        safeUpdateElement('low-risk-count', lowCount);
-        safeUpdateElement('info-risk-count', infoCount);
-        
-        // NYTT: Populera accordion-innehåll
-        populateAccordionContent('high', alertsByRisk.highAlerts || []);
-        populateAccordionContent('medium', alertsByRisk.mediumAlerts || []);
-        populateAccordionContent('low', alertsByRisk.lowAlerts || []);
-        populateAccordionContent('info', alertsByRisk.infoAlerts || []);
-        
-        // Uppdatera report date
-        safeUpdateElement('report-date', new Date().toLocaleString('sv-SE'));
-    }     
+<script src="{{ url_for('static', filename='js/report.js') }}"></script>
 
-
-    function populateAccordionContent(riskLevel, alerts) {
-        const containerId = `${riskLevel}-risk-types-accordion`;
-        const emptyMessageId = `${riskLevel}-risk-empty`;
-        
-        const container = document.getElementById(containerId);
-        const emptyMessage = document.getElementById(emptyMessageId);
-        
-        if (!container) {
-            console.warn(`Container ${containerId} not found`);
-            return;
-        }
-        
-        // Rensa befintligt innehåll
-        container.innerHTML = '';
-        
-        if (alerts.length === 0) {
-            // Visa "inga sårbarheter" meddelande
-            if (emptyMessage) {
-                emptyMessage.classList.remove('d-none');
-            }
-            return;
-        }
-        
-        // Dölj "inga sårbarheter" meddelande
-        if (emptyMessage) {
-            emptyMessage.classList.add('d-none');
-        }
-        
-        // Gruppera alerts per typ
-        const alertsByType = {};
-        alerts.forEach(alert => {
-            const alertName = alert.name || 'Okänd sårbarhet';
-            if (!alertsByType[alertName]) {
-                alertsByType[alertName] = [];
-            }
-            alertsByType[alertName].push(alert);
-        });
-        
-        // Skapa accordion items för varje alert-typ
-        Object.keys(alertsByType).forEach((alertName, index) => {
-            const alertList = alertsByType[alertName];
-            const alertId = `${riskLevel}-${index}`;
-            
-            const accordionItem = `
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="heading-${alertId}">
-                        <button class="accordion-button collapsed" type="button" 
-                                data-bs-toggle="collapse" data-bs-target="#collapse-${alertId}" 
-                                aria-expanded="false" aria-controls="collapse-${alertId}">
-                            ${alertName} <span class="badge bg-secondary ms-2">${alertList.length}</span>
-                        </button>
-                    </h2>
-                    <div id="collapse-${alertId}" class="accordion-collapse collapse" 
-                        aria-labelledby="heading-${alertId}" data-bs-parent="#${containerId}">
-                        <div class="accordion-body">
-                            ${generateAlertDetails(alertList)}
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            container.insertAdjacentHTML('beforeend', accordionItem);
-        });
-    }
-
-    // NYTT: Funktion för att generera alert-detaljer
-    function generateAlertDetails(alerts) {
-        let html = '<div class="alert-instances">';
-        
-        alerts.forEach((alert, index) => {
-
-            
-            html += `
-                <div class="alert-instance mb-3 p-3 border rounded">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <strong>URL:</strong> <code class="text-break">${alert.url || 'N/A'}</code>
-                        </div>
-                        <div class="col-md-4">
-                            <button class="btn btn-sm btn-outline-primary mt-2 float-end" onclick="showAlertDetails('${alert.alertId || index}')">
-                                Visa detaljer
-                            </button>
-                        </div>
-                    </div>
-
-                </div>
-            `;
-        });
-        
-        html += '</div>';
-        return html;
-    }
-
-    // NYTT: Hjälpfunktion för risk-färger
-    function getRiskColorClass(risk) {
-        switch (risk?.toLowerCase()) {
-            case 'high': return 'danger';
-            case 'medium': return 'warning';
-            case 'low': return 'info';
-            case 'informational': return 'secondary';
-            default: return 'secondary';
-        }
-    }
-    
-
-    function safeUpdateElement(id, content) {
-        const element = document.getElementById(id);
-        if (element) {
-            element.textContent = content;
-        } else {
-            console.warn(`Element with id '${id}' not found`);
-        }
-    }
-    
-    function hideLoadingMessage() {
-        // Dölj laddningsmeddelanden
-        const loadingElement = document.getElementById('alerts-loading');
-        if (loadingElement) {
-            loadingElement.classList.add('d-none');
-        }
-    }
-    
-    function showErrorInRecommendations(message) {
-        const recommendationsContainer = document.getElementById('recommendations-container');
-        if (recommendationsContainer) {
-            recommendationsContainer.innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle"></i> ${message}
-                </div>
-            `;
-        }
-    }
-    
-    function generateRecommendations(data) {
-        const recommendationsContainer = document.getElementById('recommendations-container');
-        if (!recommendationsContainer) {
-            console.warn('Recommendations container not found');
-            return;
-        }
-        
-        const alertsByRisk = data.alerts_by_risk || {};
-        
-        let prioritizedRecommendations = [];
-        
-        // Hög prioritet
-        if (alertsByRisk.highAlerts && alertsByRisk.highAlerts.length > 0) {
-            // Kolla för specifika sårbarheter
-            const sqlInjectionAlerts = alertsByRisk.highAlerts.filter(alert => 
-                alert.name && alert.name.toLowerCase().includes('sql injection'));
-            
-            if (sqlInjectionAlerts.length > 0) {
-                prioritizedRecommendations.push({
-                    title: 'Åtgärda SQL Injection sårbarheter OMEDELBART',
-                    description: 'SQL Injection är en kritisk sårbarhet som kan leda till databaskompromiss. Använd parameteriserade queries och validera all input.',
-                    priority: 'high',
-                    count: sqlInjectionAlerts.length
-                });
-            }
-            
-            const xssAlerts = alertsByRisk.highAlerts.filter(alert => 
-                alert.name && (alert.name.toLowerCase().includes('xss') || alert.name.toLowerCase().includes('cross site scripting')));
-            
-            if (xssAlerts.length > 0) {
-                prioritizedRecommendations.push({
-                    title: 'Implementera XSS-skydd',
-                    description: 'Cross-Site Scripting sårbarheter hittades. Implementera Content Security Policy och validera/koda all output.',
-                    priority: 'high',
-                    count: xssAlerts.length
-                });
-            }
-            
-            // Generisk rekommendation för andra höga risker
-            if (prioritizedRecommendations.length === 0) {
-                prioritizedRecommendations.push({
-                    title: 'Åtgärda högrisk sårbarheter omedelbart',
-                    description: 'Kritiska säkerhetsproblem har identifierats som kräver omedelbar uppmärksamhet.',
-                    priority: 'high',
-                    count: alertsByRisk.highAlerts.length
-                });
-            }
-        }
-        
-        // Medelhög prioritet
-        if (alertsByRisk.mediumAlerts && alertsByRisk.mediumAlerts.length > 0) {
-            prioritizedRecommendations.push({
-                title: 'Granska säkerhetsheaders',
-                description: 'Implementera säkerhetsheaders som CSRF-tokens, X-Frame-Options och Content Security Policy.',
-                priority: 'medium',
-                count: alertsByRisk.mediumAlerts.length
-            });
-        }
-        
-        // Låg prioritet
-        if (alertsByRisk.lowAlerts && alertsByRisk.lowAlerts.length > 0) {
-            prioritizedRecommendations.push({
-                title: 'Förbättra informationssäkerhet',
-                description: 'Dölj versionsinfo och implementera proper cache-control headers.',
-                priority: 'low',
-                count: alertsByRisk.lowAlerts.length
-            });
-        }
-        
-        // Allmän rekommendation
-        prioritizedRecommendations.push({
-            title: 'Implementera säker utvecklingsprocess',
-            description: 'Utbilda utvecklare i säker kodning och implementera säkerhetsgranskningar i utvecklingsprocessen.',
-            priority: 'low'
-        });
-        
-        // Om inga sårbarheter finns
-        if (prioritizedRecommendations.length === 1) { // Bara den allmänna rekommendationen
-            prioritizedRecommendations.unshift({
-                title: 'Bra jobbat!',
-                description: 'Inga allvarliga säkerhetsproblem hittades. Fortsätt med regelbundna säkerhetskontroller.',
-                priority: 'success'
-            });
-        }
-        
-        // Visa rekommendationer
-        let recommendationsHTML = `<ul class="list-group">`;
-        
-        prioritizedRecommendations.forEach(rec => {
-            let priorityClass;
-            switch (rec.priority) {
-                case 'high':
-                    priorityClass = 'list-group-item-danger';
-                    break;
-                case 'medium':
-                    priorityClass = 'list-group-item-warning';
-                    break;
-                case 'success':
-                    priorityClass = 'list-group-item-success';
-                    break;
-                default:
-                    priorityClass = 'list-group-item-info';
-            }
-            
-            const countBadge = rec.count ? `<span class="badge bg-secondary">${rec.count}</span>` : '';
-            
-            recommendationsHTML += `
-                <li class="list-group-item ${priorityClass}">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h5 class="mb-1">${rec.title} ${countBadge}</h5>
-                        <small>${rec.priority.charAt(0).toUpperCase() + rec.priority.slice(1)} prioritet</small>
-                    </div>
-                    <p class="mb-1">${rec.description}</p>
-                </li>
-            `;
-        });
-        
-        recommendationsHTML += `</ul>`;
-        recommendationsContainer.innerHTML = recommendationsHTML;
-    }
-    
-    // ====================================================
-    // NYA PDF-NEDLADDNINGSFUNKTIONER (TRE RAPPORTTYPER)
-    // ====================================================
-    
-    // Hantera PDF-nedladdning för alla rapporttyper
-    document.querySelectorAll('.pdf-download-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            const reportType = this.getAttribute('data-report-type');
-            const originalText = this.innerHTML;
-            
-            // Visa laddningsindikator
-            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar...';
-            
-            // Inaktivera alla dropdown-items
-            document.querySelectorAll('.pdf-download-btn').forEach(btn => {
-                btn.style.pointerEvents = 'none';
-            });
-            
-            // Gör fetch-anrop för att hämta PDF
-            fetch(`/api/download-pdf-report/${reportType}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.blob();
-                })
-                .then(blob => {
-                    // Skapa en URL för blob och ladda ner filen
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    
-                    // Generera filnamn baserat på rapporttyp
-                    const reportNames = {
-                        'basic': 'basic_slutkund',
-                        'medium': 'medium_detaljerad', 
-                        'full': 'fullstandig'
-                    };
-                    
-                    a.download = `sakerheterapport_${reportNames[reportType]}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    
-                    // Visa framgångsmeddelande
-                    showSuccessMessage(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} rapport har laddats ner!`);
-                })
-                .catch(error => {
-                    console.error('Error downloading PDF:', error);
-                    showErrorMessage('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
-                })
-                .finally(() => {
-                    // Återställ alla knappar
-                    document.querySelectorAll('.pdf-download-btn').forEach(btn => {
-                        btn.style.pointerEvents = 'auto';
-                    });
-                    this.innerHTML = originalText;
-                });
-        });
-    });
-    
-    // ====================================================
-    // JSON-NEDLADDNING (BEFINTLIG KOD)
-    // ====================================================
-    
-    // Hantera nedladdning av rapport som JSON
-    const downloadReportBtn = document.getElementById('download-report-btn');
-    if (downloadReportBtn) {
-        downloadReportBtn.addEventListener('click', function() {
-            fetch('/api/download-report/{{ report_id }}')
-                .then(response => response.json())
-                .then(data => {
-                    // Skapa en JSON-fil för nedladdning
-                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-                    const downloadAnchorNode = document.createElement('a');
-                    downloadAnchorNode.setAttribute("href", dataStr);
-                    downloadAnchorNode.setAttribute("download", `pentesting_report_${data.id || '{{ report_id }}'}.json`);
-                    document.body.appendChild(downloadAnchorNode);
-                    downloadAnchorNode.click();
-                    downloadAnchorNode.remove();
-                })
-                .catch(error => {
-                    console.error('Error downloading report:', error);
-                    alert('Kunde inte hämta rapporten. Vänligen försök igen.');
-                });
-        });
-    }
-    
-    // ====================================================
-    // HJÄLPFUNKTIONER FÖR MEDDELANDEN
-    // ====================================================
-    
-    function showSuccessMessage(message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-success alert-dismissible fade show';
-        alertDiv.innerHTML = `
-            <i class="bi bi-check-circle-fill"></i> ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        // Lägg till i början av första card-body vi hittar
-        const cardBody = document.querySelector('.card-body');
-        if (cardBody) {
-            cardBody.insertBefore(alertDiv, cardBody.firstChild);
-        }
-        
-        // Ta bort efter 5 sekunder
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
-    }
-    
-    function showErrorMessage(message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-        alertDiv.innerHTML = `
-            <i class="bi bi-exclamation-triangle-fill"></i> ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        // Lägg till i början av första card-body vi hittar
-        const cardBody = document.querySelector('.card-body');
-        if (cardBody) {
-            cardBody.insertBefore(alertDiv, cardBody.firstChild);
-        }
-        
-        // Ta bort efter 5 sekunder
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
-    }
-    
-    // ====================================================
-    // INITIALISERING
-    // ====================================================
-    
-    // Initiera hämtning av sårbarheter när sidan laddas
-    fetchVulnerabilities();
-});
-
-// ====================================================
-// DEBUG-FUNKTIONALITET (OM AKTIVERAD)
-// ====================================================
-
-{% if debug_mode %}
-// Debug-knappar
-document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('debug-api-btn')) {
-        document.getElementById('debug-api-btn').addEventListener('click', function() {
-            fetch('/api/zap-alerts-by-risk')
-                .then(response => response.json())
-                .then(data => {
-                    const debugJson = document.getElementById('debug-json');
-                    if (debugJson) {
-                        debugJson.textContent = JSON.stringify(data, null, 2);
-                    }
-                    const debugResults = document.getElementById('debug-results');
-                    if (debugResults) {
-                        debugResults.classList.remove('d-none');
-                    }
-                })
-                .catch(error => {
-                    const debugJson = document.getElementById('debug-json');
-                    if (debugJson) {
-                        debugJson.textContent = 'Error: ' + error.message;
-                    }
-                    const debugResults = document.getElementById('debug-results');
-                    if (debugResults) {
-                        debugResults.classList.remove('d-none');
-                    }
-                });
-        });
-    }
-    
-    if (document.getElementById('debug-raw-json-btn')) {
-        document.getElementById('debug-raw-json-btn').addEventListener('click', function() {
-            fetch('/debug-zap-api')
-                .then(response => response.json())
-                .then(data => {
-                    const debugJson = document.getElementById('debug-json');
-                    if (debugJson) {
-                        debugJson.textContent = JSON.stringify(data, null, 2);
-                    }
-                    const debugResults = document.getElementById('debug-results');
-                    if (debugResults) {
-                        debugResults.classList.remove('d-none');
-                    }
-                })
-                .catch(error => {
-                    const debugJson = document.getElementById('debug-json');
-                    if (debugJson) {
-                        debugJson.textContent = 'Error: ' + error.message;
-                    }
-                    const debugResults = document.getElementById('debug-results');
-                    if (debugResults) {
-                        debugResults.classList.remove('d-none');
-                    }
-                });
-        });
-    }
-    
-    // Logga extra information i konsolen
-    console.info('Debug mode enabled');
-    console.info('Target URL:', '{{ target_url }}');
-    console.info('Report ID:', '{{ report_id }}');
-});
-{% endif %}
-</script>
 {% endblock %}

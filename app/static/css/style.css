@@ -599,3 +599,54 @@ pre {
 .badge.bg-success {
     background: linear-gradient(135deg, #198754 0%, #146c43 100%) !important;
 }
+
+/* Anpassad styling för modal */
+#alertDetailsModal .modal-dialog {
+    max-width: 90%;
+}
+
+#alertDetailsModal .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+#alertDetailsModal h6 {
+    margin-bottom: 8px;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 4px;
+}
+
+#alertDetailsModal .bg-light {
+    background-color: #f8f9fa !important;
+}
+
+#alertDetailsModal code {
+    background-color: #e9ecef;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+#alertDetailsModal .badge {
+    font-size: 0.8em;
+}
+
+#alertDetailsModal .accordion-button {
+    font-weight: 500;
+}
+
+/* Responsiv design */
+@media (max-width: 768px) {
+    #alertDetailsModal .modal-dialog {
+        max-width: 95%;
+        margin: 10px;
+    }
+    
+    #alertDetailsModal .modal-body {
+        max-height: 60vh;
+    }
+    
+    #alertDetailsModal .row {
+        margin-bottom: 1rem;
+    }
+}
