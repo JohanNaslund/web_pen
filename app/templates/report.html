@@ -419,5 +419,15 @@
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/report.js') }}"></script>
-
+<script>
+// Behåll bara detta för att sätta template-variabler
+document.addEventListener('DOMContentLoaded', function() {
+    // Template-variabler som JavaScript behöver
+    window.REPORT_CONFIG = {
+        target_url: '{{ target_url }}',
+        report_id: '{{ report_id }}',
+        debug_mode: {{ debug_mode|tojson }}
+    };
+});
+</script>
 {% endblock %}

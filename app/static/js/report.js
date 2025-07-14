@@ -134,15 +134,23 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '<div class="alert-instances">';
         
         alerts.forEach((alert, index) => {
+            if (index >= 5) { // Begränsa till 5 instanser
+                html += `<p class="text-muted">...och ${alerts.length - 5} fler instanser</p>`;
+                return;
+            }
+            
+            // Skapa en säker JSON-string för onclick
+            const alertJson = JSON.stringify(alert).replace(/"/g, '&quot;');
+            
             html += `
                 <div class="alert-instance mb-3 p-3 border rounded">
                     <div class="row">
                         <div class="col-md-8">
-                            <strong>URL:</strong> <code class="text-break">${alert.url || 'N/A'}</code>
+                            <strong>URL:</strong> <code class="text-break">${escapeHtml(alert.url || 'N/A')}</code>
                         </div>
                         <div class="col-md-4">
-                            <button class="btn btn-sm btn-outline-primary mt-2 float-end" onclick="showAlertDetails('${alert.alertId || index}')">
-                                Visa detaljer
+                            <button class="btn btn-sm btn-outline-primary mt-2 float-end" onclick='showAlertDetailsFromData(${alertJson})'>
+                                <i class="bi bi-info-circle me-1"></i>Visa detaljer
                             </button>
                         </div>
                     </div>
@@ -152,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         html += '</div>';
         return html;
-    }
+}
 
     // NYTT: Hjälpfunktion för risk-färger
     function getRiskColorClass(risk) {
