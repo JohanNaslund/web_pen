@@ -317,7 +317,7 @@
                 <!-- Referenser -->
                 <div class="mb-4">
                     <h6 class="fw-bold text-info">
-                        <i class="bi bi-link-45deg me-2"></i>Referenser & ZAP-länkar
+                        <i class="bi bi-link-45deg me-2"></i>Referenser
                     </h6>
                     <div id="alert-references" class="p-3 bg-light rounded border"></div>
                 </div>
@@ -369,16 +369,6 @@
                         </h2>
                         <div id="technicalCollapse" class="accordion-collapse collapse" aria-labelledby="technicalHeading" data-bs-parent="#technicalAccordion">
                             <div class="accordion-body">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6 class="fw-bold">Alert ID</h6>
-                                        <div id="alert-id" class="p-2 bg-light rounded border mb-3"></div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h6 class="fw-bold">Plugin ID</h6>
-                                        <div id="alert-plugin-id" class="p-2 bg-light rounded border mb-3"></div>
-                                    </div>
-                                </div>
                                 
                                 <div class="row">
                                     <div class="col-md-6">
@@ -391,9 +381,7 @@
                                     </div>
                                 </div>
                                 
-                                <h6 class="fw-bold">Request/Response Information</h6>
-                                <div id="alert-request-response" class="p-2 bg-light rounded border mb-3"></div>
-                                
+                               
                                 <h6 class="fw-bold">Andra URLs som påverkas</h6>
                                 <div id="alert-other-urls" class="p-2 bg-light rounded border"></div>
                             </div>
@@ -405,9 +393,6 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle me-2"></i>Stäng
-                </button>
-                <button type="button" class="btn btn-primary" onclick="copyAlertDetails()">
-                    <i class="bi bi-clipboard me-2"></i>Kopiera detaljer
                 </button>
                 <button type="button" class="btn btn-info" onclick="exportAlertDetails()">
                     <i class="bi bi-download me-2"></i>Exportera
