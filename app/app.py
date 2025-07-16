@@ -26,7 +26,10 @@ from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 import tempfile
 from flask import make_response
-
+import pandas as pd
+from datetime import datetime
+import io
+from flask import make_response
 
 active_recordings = {}
 
@@ -3143,8 +3146,559 @@ def api_access_control_recording_status():
             'is_recording': False
         }), 500
 
+@app.route('/api/download-excel-report/<report_id>')
+def api_download_excel_report(report_id):
+    """API för att ladda ner rapporten som Excel-fil"""
+    target_url = session.get('target_url', '')
+    
+    if not target_url:
+        return jsonify({'error': 'No target URL in session'}), 400
+    
+    try:
+        # Hämta samma data som JSON-nedladdning
+        reports_dir = os.path.join(app.config['RESULTS_DIR'], 'reports')
+        report_path = os.path.join(reports_dir, f"{report_id}.json")
+        
+        # Om rapporten inte finns, generera den
+        if not os.path.exists(report_path):
+            # Hämta detaljerad ZAP-data (samma som PDF använder)
+            alerts_data = get_zap_alerts_data_fixed(target_url)
+            
+            if 'error' in alerts_data:
+                return jsonify({'error': f'Error fetching detailed ZAP data: {alerts_data["error"]}'}), 500
+            
+            report_data = {
+                'id': report_id,
+                'timestamp': time.time(),
+                'report_date': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'target_url': target_url,
+                'zap_available': zap.is_available(),
+                'alerts_by_risk': alerts_data.get('alerts_by_risk', {}),
+                'summary': alerts_data.get('summary', {})
+            }
+            
+            if 'summary' in alerts_data:
+                report_data['severity_counts'] = {
+                    'high': alerts_data['summary'].get('High', 0),
+                    'medium': alerts_data['summary'].get('Medium', 0),
+                    'low': alerts_data['summary'].get('Low', 0),
+                    'informational': alerts_data['summary'].get('Informational', 0)
+                }
+            
+            # Spara rapporten
+            try:
+                os.makedirs(reports_dir, exist_ok=True)
+                with open(report_path, 'w') as f:
+                    json.dump(report_data, f, indent=2)
+            except Exception as save_error:
+                app.logger.warning(f"Could not save report to disk: {str(save_error)}")
+        else:
+            # Läs befintlig rapport
+            with open(report_path, 'r') as f:
+                report_data = json.load(f)
+        
+        # Konvertera till Excel
+        excel_buffer = create_excel_from_report_data(report_data)
+        
+        # Skapa svar
+        response = make_response(excel_buffer.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=sakerheterapport_{report_id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Error generating Excel report: {str(e)}")
+        return jsonify({'error': f'Error generating Excel report: {str(e)}'}), 500
 
-# Lägg till dessa routes i din app.py fil
+
+def create_excel_from_report_data(report_data):
+    """Konvertera rapportdata till Excel-format med sortering"""
+    excel_buffer = io.BytesIO()
+    
+    # Debug: Kontrollera vad som finns i report_data
+    print(f"DEBUG: Report data keys: {list(report_data.keys())}")
+    alerts_by_risk = report_data.get('alerts_by_risk', {})
+    print(f"DEBUG: Alerts by risk keys: {list(alerts_by_risk.keys())}")
+    
+    # Kontrollera om det finns alerts
+    for risk_level, alerts in alerts_by_risk.items():
+        if alerts:
+            first_alert = alerts[0]
+            print(f"DEBUG: First {risk_level} alert keys: {list(first_alert.keys())}")
+            print(f"DEBUG: First {risk_level} alert description: {first_alert.get('description', 'MISSING')[:100]}...")
+            print(f"DEBUG: First {risk_level} alert solution: {first_alert.get('solution', 'MISSING')[:100]}...")
+            break
+    
+    # Skapa Excel-writer
+    with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+        
+        # Sammanfattning
+        create_summary_sheet(writer, report_data)
+        
+        # Förenklad sårbarheter (sorterade)
+        create_vulnerabilities_sheet(writer, report_data)
+        
+        # Detaljerade flikar för varje problemtyp
+        try:
+            create_problem_detail_sheets(writer, report_data)
+        except Exception as e:
+            print(f"ERROR creating problem detail sheets: {e}")
+            # Skapa enkel flik med felmeddelande
+            error_df = pd.DataFrame([
+                ['Fel', 'Kunde inte skapa problemdetaljer'],
+                ['Felmeddelande', str(e)]
+            ])
+            error_df.to_excel(writer, sheet_name='Fel', index=False, header=False)
+        
+        # Statistik
+        create_statistics_sheet(writer, report_data)
+    
+    excel_buffer.seek(0)
+    return excel_buffer
+
+
+def create_problem_detail_sheets(writer, report_data):
+    """Skapa separata flikar för varje problemtyp med detaljerad information"""
+    alerts_by_risk = report_data.get('alerts_by_risk', {})
+    
+    # Använd samma organisering som PDF-rapporten för att få detaljerad information
+    organized_data = organize_alerts_by_type_and_risk(alerts_by_risk)
+    
+    # Samla alla problem från organiserad data
+    all_problems = []
+    risk_levels = ['high', 'medium', 'low', 'info']
+    risk_priority = {'high': 1, 'medium': 2, 'low': 3, 'info': 4}
+    
+    for risk_level in risk_levels:
+        if risk_level in organized_data:
+            for problem_name, problem_data in organized_data[risk_level].items():
+                problem_info = {
+                    'name': problem_name,
+                    'risk_level': risk_level.title(),
+                    'risk_priority': risk_priority[risk_level],
+                    'description': problem_data.get('description', 'Ingen beskrivning tillgänglig'),
+                    'solution': problem_data.get('solution', 'Inga åtgärdsförslag tillgängliga'),
+                    'reference': problem_data.get('reference', ''),
+                    'cweid': problem_data.get('cweid', ''),
+                    'wascid': problem_data.get('wascid', ''),
+                    'confidence': problem_data.get('confidence', 'N/A'),
+                    'instances': problem_data.get('instances', [])
+                }
+                all_problems.append(problem_info)
+    
+    # Sortera problem efter risk och namn
+    all_problems.sort(key=lambda x: (x['risk_priority'], x['name']))
+    
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+    
+    # Skapa en flik för varje problem
+    for problem_data in all_problems:
+        # Begränsa flik-namnet till 31 tecken (Excel-begränsning)
+        sheet_name = problem_data['name'][:28] + "..." if len(problem_data['name']) > 31 else problem_data['name']
+        
+        # Hantera långa texter genom att dela upp dem i kortare rader
+        def split_long_text(text, max_length=100):
+            """Dela upp lång text i flera rader för Excel"""
+            if not text or len(text) <= max_length:
+                return [text] if text else ['']
+            
+            # Vanlig textuppdelning för beskrivningar och lösningar
+            words = text.split()
+            lines = []
+            current_line = []
+            current_length = 0
+            
+            for word in words:
+                if current_length + len(word) + 1 <= max_length:
+                    current_line.append(word)
+                    current_length += len(word) + 1
+                else:
+                    if current_line:
+                        lines.append(' '.join(current_line))
+                        current_line = [word]
+                        current_length = len(word)
+                    else:
+                        # Mycket långt ord, dela upp det
+                        lines.append(word[:max_length])
+                        word = word[max_length:]
+                        current_line = [word] if word else []
+                        current_length = len(word)
+            
+            if current_line:
+                lines.append(' '.join(current_line))
+            
+            return lines
+        
+        def split_references(text, max_length=80):
+            """Dela upp referenser/URL:er i flera rader"""
+            if not text or len(text) <= max_length:
+                return [text] if text else ['']
+            
+            # Dela först vid vanliga separatorer
+            separators = ['\n', '\r\n', ', ', '; ', ' ']
+            parts = [text]
+            
+            for sep in separators:
+                new_parts = []
+                for part in parts:
+                    if sep in part:
+                        new_parts.extend(part.split(sep))
+                    else:
+                        new_parts.append(part)
+                parts = new_parts
+            
+            # Filtrera tomma delar och hantera långa URL:er
+            result = []
+            for part in parts:
+                part = part.strip()
+                if part:
+                    if len(part) <= max_length:
+                        result.append(part)
+                    else:
+                        # Dela längre URL:er vid '/' om möjligt
+                        if '/' in part and 'http' in part.lower():
+                            url_parts = part.split('/')
+                            current_line = url_parts[0]
+                            for url_part in url_parts[1:]:
+                                if len(current_line + '/' + url_part) <= max_length:
+                                    current_line += '/' + url_part
+                                else:
+                                    result.append(current_line)
+                                    current_line = url_part
+                            if current_line:
+                                result.append(current_line)
+                        else:
+                            # Vanlig textuppdelning för långa texter
+                            result.extend(split_long_text(part, max_length))
+            
+            return result if result else ['']
+        
+        # Dela upp beskrivning, lösning och referenser
+        description_lines = split_long_text(problem_data['description'])
+        solution_lines = split_long_text(problem_data['solution'])
+        reference_lines = split_references(problem_data['reference'])
+        
+        # Skapa problem-detaljdata med uppdelad text
+        problem_info = [
+            ['Problem', problem_data['name']],
+            ['Säkerhetsnivå', problem_data['risk_level']],
+            ['Tillförlitlighet', problem_data['confidence']],
+            ['Antal instanser', len(problem_data['instances'])],
+            ['', ''],  # Tom rad
+            ['BESKRIVNING', ''],
+        ]
+        
+        # Lägg till beskrivningsrader
+        for line in description_lines:
+            problem_info.append(['', line])
+        
+        problem_info.extend([
+            ['', ''],  # Tom rad
+            ['ÅTGÄRDSFÖRSLAG', ''],
+        ])
+        
+        # Lägg till lösningsrader
+        for line in solution_lines:
+            problem_info.append(['', line])
+        
+        problem_info.extend([
+            ['', ''],  # Tom rad
+            ['TEKNISK INFORMATION', ''],
+            ['CWE ID', problem_data['cweid']],
+            ['WASC ID', problem_data['wascid']],
+            ['', ''],  # Tom rad för bättre läsbarhet
+            ['REFERENSER', ''],
+        ])
+        
+        # Lägg till referensrader
+        for line in reference_lines:
+            if line.strip():  # Endast om raden inte är tom
+                problem_info.append(['', line])
+        
+        problem_info.extend([
+            ['', ''],  # Tom rad
+            ['INSTANSER', ''],
+            ['URL', 'Parameter', 'Attack']
+        ])
+        
+        # Lägg till instanser
+        for instance in problem_data['instances']:
+            problem_info.append([
+                instance.get('url', 'N/A'),
+                instance.get('param', 'N/A'),
+                instance.get('attack', 'N/A')
+            ])
+        
+        # Skapa DataFrame och exportera
+        max_cols = max(len(row) for row in problem_info)
+        padded_info = [row + [''] * (max_cols - len(row)) for row in problem_info]
+        
+        try:
+            problem_df = pd.DataFrame(padded_info)
+            problem_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+            
+            # Formatera bladet
+            workbook = writer.book
+            worksheet = writer.sheets[sheet_name]
+            
+            # Färgkodning baserat på risknivå
+            risk_colors = {
+                'High': PatternFill(start_color='FFCCCC', end_color='FFCCCC', fill_type='solid'),
+                'Medium': PatternFill(start_color='FFEDCC', end_color='FFEDCC', fill_type='solid'),
+                'Low': PatternFill(start_color='FFFFCC', end_color='FFFFCC', fill_type='solid'),
+                'Info': PatternFill(start_color='E6F3FF', end_color='E6F3FF', fill_type='solid')
+            }
+            
+            # Formatera header-rader
+            header_font = Font(bold=True, size=12)
+            section_font = Font(bold=True, size=10, color='FFFFFF')
+            section_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+            
+            # Formatera probleminfo (första raderna)
+            for row in range(1, 5):
+                cell_a = worksheet.cell(row=row, column=1)
+                cell_a.font = header_font
+                cell_a.fill = risk_colors.get(problem_data['risk_level'], PatternFill())
+                
+                cell_b = worksheet.cell(row=row, column=2)
+                cell_b.fill = risk_colors.get(problem_data['risk_level'], PatternFill())
+            
+            # Hitta sektionsrubriker dynamiskt
+            section_headers = ['BESKRIVNING', 'ÅTGÄRDSFÖRSLAG', 'TEKNISK INFORMATION', 'REFERENSER', 'INSTANSER']
+            for row_idx, row_data in enumerate(problem_info, 1):
+                if row_data[0] in section_headers:
+                    cell = worksheet.cell(row=row_idx, column=1)
+                    cell.font = section_font
+                    cell.fill = section_fill
+                    
+                    # För INSTANSER, formatera även kolumnrubriker
+                    if row_data[0] == 'INSTANSER' and row_idx < len(problem_info):
+                        next_row = worksheet.cell(row=row_idx + 1, column=1)
+                        if next_row.value == 'URL':
+                            for col in range(1, 4):
+                                header_cell = worksheet.cell(row=row_idx + 1, column=col)
+                                header_cell.font = section_font
+                                header_cell.fill = section_fill
+            
+            # Sätt kolumnbredd
+            worksheet.column_dimensions['A'].width = 30
+            worksheet.column_dimensions['B'].width = 80
+            worksheet.column_dimensions['C'].width = 25
+            
+            # Slå ihop celler för sektionsrubriker
+            try:
+                for row_idx, row_data in enumerate(problem_info, 1):
+                    if row_data[0] in section_headers and max_cols > 1:
+                        worksheet.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=max_cols)
+            except Exception as merge_error:
+                print(f"Warning: Could not merge cells for {sheet_name}: {merge_error}")
+            
+        except Exception as sheet_error:
+            print(f"Error creating sheet {sheet_name}: {sheet_error}")
+            # Skapa enklare version om det misslyckas
+            simple_df = pd.DataFrame([
+                ['Problem', problem_data['name']],
+                ['Beskrivning', problem_data['description'][:500] + '...' if len(problem_data['description']) > 500 else problem_data['description']],
+                ['Åtgärdsförslag', problem_data['solution'][:500] + '...' if len(problem_data['solution']) > 500 else problem_data['solution']]
+            ])
+            simple_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+
+
+def create_summary_sheet(writer, report_data):
+    """Skapa sammanfattningsblad"""
+    summary_data = {
+        'Rapport Information': [
+            'Rapport ID',
+            'Mål URL',
+            'Genererad datum',
+            'ZAP Status'
+        ],
+        'Värde': [
+            report_data.get('id', 'N/A'),
+            report_data.get('target_url', 'N/A'),
+            report_data.get('report_date', 'N/A'),
+            'Tillgänglig' if report_data.get('zap_available', False) else 'Inte tillgänglig'
+        ]
+    }
+    
+    summary_df = pd.DataFrame(summary_data)
+    summary_df.to_excel(writer, sheet_name='Sammanfattning', index=False)
+    
+    # Säkerhetsnivå sammanfattning
+    if 'severity_counts' in report_data:
+        severity_data = {
+            'Säkerhetsnivå': ['High', 'Medium', 'Low', 'Informational'],
+            'Antal': [
+                report_data['severity_counts'].get('high', 0),
+                report_data['severity_counts'].get('medium', 0),
+                report_data['severity_counts'].get('low', 0),
+                report_data['severity_counts'].get('informational', 0)
+            ]
+        }
+        
+        severity_df = pd.DataFrame(severity_data)
+        severity_df.to_excel(writer, sheet_name='Sammanfattning', index=False, startrow=len(summary_df) + 3)
+
+
+def create_vulnerabilities_sheet(writer, report_data):
+    """Skapa förenklat sårbarhetsblad med sortering"""
+    alerts_by_risk = report_data.get('alerts_by_risk', {})
+    
+    # Samla alla sårbarheter i en lista
+    all_vulnerabilities = []
+    
+    # Definiera prioritetsordning för sortering
+    risk_priority = {'High': 1, 'Medium': 2, 'Low': 3, 'Informational': 4}
+    
+    # Extrahera data från varje risknivå
+    risk_mappings = {
+        'highAlerts': 'High',
+        'mediumAlerts': 'Medium',
+        'lowAlerts': 'Low',
+        'infoAlerts': 'Informational'
+    }
+    
+    for alerts_key, risk_level in risk_mappings.items():
+        if alerts_key in alerts_by_risk:
+            for alert in alerts_by_risk[alerts_key]:
+                vulnerability = {
+                    'Säkerhetsnivå': risk_level,
+                    'Problem': alert.get('name', 'Okänt problem'),
+                    'URL': alert.get('url', 'N/A'),
+                    'Parameter': alert.get('param', 'N/A'),
+                    'Tillförlitlighet': alert.get('confidence', 'N/A'),
+                    'Risk Priority': risk_priority.get(risk_level, 5)  # För sortering
+                }
+                all_vulnerabilities.append(vulnerability)
+    
+    if all_vulnerabilities:
+        # Skapa DataFrame
+        vulnerabilities_df = pd.DataFrame(all_vulnerabilities)
+        
+        # Sortera efter säkerhetsnivå (High -> Medium -> Low -> Informational) och sedan efter problem
+        vulnerabilities_df = vulnerabilities_df.sort_values(['Risk Priority', 'Problem'], ascending=[True, True])
+        
+        # Ta bort den interna sorterings-kolumnen innan export
+        vulnerabilities_df = vulnerabilities_df.drop(columns=['Risk Priority'])
+        
+        # Exportera till Excel
+        vulnerabilities_df.to_excel(writer, sheet_name='Sårbarheter', index=False)
+        
+        # Formatera arbetsbladet
+        workbook = writer.book
+        worksheet = writer.sheets['Sårbarheter']
+        
+        # Sätt kolumnbredd
+        worksheet.column_dimensions['A'].width = 15  # Säkerhetsnivå
+        worksheet.column_dimensions['B'].width = 40  # Problem
+        worksheet.column_dimensions['C'].width = 50  # URL
+        worksheet.column_dimensions['D'].width = 20  # Parameter
+        worksheet.column_dimensions['E'].width = 15  # Tillförlitlighet
+        
+        # Formatera header
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        header_font = Font(bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+        
+        for col in range(1, len(vulnerabilities_df.columns) + 1):
+            cell = worksheet.cell(row=1, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Färgkoda rader baserat på säkerhetsnivå
+        risk_colors = {
+            'High': PatternFill(start_color='FFCCCC', end_color='FFCCCC', fill_type='solid'),
+            'Medium': PatternFill(start_color='FFEDCC', end_color='FFEDCC', fill_type='solid'),
+            'Low': PatternFill(start_color='FFFFCC', end_color='FFFFCC', fill_type='solid'),
+            'Informational': PatternFill(start_color='E6F3FF', end_color='E6F3FF', fill_type='solid')
+        }
+        
+        for row in range(2, len(vulnerabilities_df) + 2):
+            risk_level = worksheet.cell(row=row, column=1).value
+            fill = risk_colors.get(risk_level, PatternFill())
+            
+            for col in range(1, len(vulnerabilities_df.columns) + 1):
+                worksheet.cell(row=row, column=col).fill = fill
+    
+    else:
+        # Skapa tom worksheet om inga sårbarheter
+        empty_df = pd.DataFrame({'Meddelande': ['Inga sårbarheter funna']})
+        empty_df.to_excel(writer, sheet_name='Sårbarheter', index=False)
+
+
+def create_statistics_sheet(writer, report_data):
+    """Skapa statistikblad"""
+    alerts_by_risk = report_data.get('alerts_by_risk', {})
+    
+    # Räkna problem per kategori
+    problem_counts = {}
+    risk_mappings = {
+        'highAlerts': 'High',
+        'mediumAlerts': 'Medium',
+        'lowAlerts': 'Low',
+        'infoAlerts': 'Informational'
+    }
+    
+    for alerts_key, risk_level in risk_mappings.items():
+        if alerts_key in alerts_by_risk:
+            for alert in alerts_by_risk[alerts_key]:
+                problem_name = alert.get('name', 'Okänt problem')
+                if problem_name not in problem_counts:
+                    problem_counts[problem_name] = {'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0}
+                problem_counts[problem_name][risk_level] += 1
+    
+    if problem_counts:
+        # Skapa DataFrame för problemstatistik
+        stats_data = []
+        for problem, counts in problem_counts.items():
+            stats_data.append({
+                'Problem': problem,
+                'High': counts['High'],
+                'Medium': counts['Medium'],
+                'Low': counts['Low'],
+                'Informational': counts['Informational'],
+                'Total': sum(counts.values())
+            })
+        
+        # Sortera efter totalt antal
+        stats_data.sort(key=lambda x: x['Total'], reverse=True)
+        
+        stats_df = pd.DataFrame(stats_data)
+        stats_df.to_excel(writer, sheet_name='Statistik', index=False)
+        
+        # Formatera statistikblad
+        workbook = writer.book
+        worksheet = writer.sheets['Statistik']
+        
+        # Sätt kolumnbredd
+        worksheet.column_dimensions['A'].width = 40  # Problem
+        worksheet.column_dimensions['B'].width = 10  # High
+        worksheet.column_dimensions['C'].width = 10  # Medium
+        worksheet.column_dimensions['D'].width = 10  # Low
+        worksheet.column_dimensions['E'].width = 15  # Informational
+        worksheet.column_dimensions['F'].width = 10  # Total
+        
+        # Formatera header
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        header_font = Font(bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+        
+        for col in range(1, len(stats_df.columns) + 1):
+            cell = worksheet.cell(row=1, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+    
+    else:
+        # Skapa tom worksheet om inga data
+        empty_df = pd.DataFrame({'Meddelande': ['Ingen statistik tillgänglig']})
+        empty_df.to_excel(writer, sheet_name='Statistik', index=False)
+
 
 @app.route('/api/download-pdf-report')
 @app.route('/api/download-pdf-report/<report_type>')

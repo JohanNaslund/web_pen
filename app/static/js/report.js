@@ -928,6 +928,53 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         });
     }
+
+    const downloadExcelBtn = document.getElementById('download-excel-btn');
+    if (downloadExcelBtn) {
+        downloadExcelBtn.addEventListener('click', function() {
+            const reportId = window.REPORT_CONFIG ? window.REPORT_CONFIG.report_id : 'unknown';
+            const originalText = this.innerHTML;
+            
+            // Visa laddningsindikator
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar Excel...';
+            this.disabled = true;
+            
+            fetch(`/api/download-excel-report/${reportId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    // Skapa download-länk
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    
+                    // Skapa filnamn med timestamp
+                    const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-');
+                    a.download = `sakerheterapport_${reportId}_${timestamp}.xlsx`;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showSuccessMessage('Excel-rapporten har laddats ner!');
+                })
+                .catch(error => {
+                    console.error('Error downloading Excel report:', error);
+                    showErrorMessage('Kunde inte generera Excel-rapporten. Vänligen försök igen.');
+                })
+                .finally(() => {
+                    // Återställ knappen
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                });
+        });
+    }    
     
     // Debug-funktioner
     if (window.REPORT_CONFIG && window.REPORT_CONFIG.debug_mode) {

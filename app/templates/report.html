@@ -42,24 +42,29 @@
                         <ul class="dropdown-menu">
                             <li>
                                 <a class="dropdown-item pdf-download-btn" href="#" data-report-type="basic">
-                                    <i class="bi bi-file-earmark-text"></i> Basic rapport (slutkund)
+                                    <i class="bi bi-file-earmark-text"></i>Översiktsrapport (slutkund)
                                     <small class="text-muted d-block">Enkel översikt med sammanfattning</small>
                                 </a>
                             </li>
                             <li>
                                 <a class="dropdown-item pdf-download-btn" href="#" data-report-type="medium">
-                                    <i class="bi bi-file-earmark-medical"></i> Medium rapport
-                                    <small class="text-muted d-block">Med beskrivningar och konfidensgrad</small>
+                                    <i class="bi bi-file-earmark-medical"></i>Medium rapport
+                                    <small class="text-muted d-block">Med beskrivningar av felen</small>
                                 </a>
                             </li>
                             <li>
                                 <a class="dropdown-item pdf-download-btn" href="#" data-report-type="full">
-                                    <i class="bi bi-file-earmark-check"></i> Teknisk rapport
-                                    <small class="text-muted d-block">Komplett med rekommenderade åtgärder och referenser</small>
+                                    <i class="bi bi-file-earmark-check"></i>Teknisk rapport
+                                    <small class="text-muted d-block">Med rekommenderade åtgärder och referenser</small>
                                 </a>
                             </li>
                         </ul>
                     </div>
+                    
+                    <!-- NY: Excel-nedladdning knapp -->
+                    <button class="btn btn-outline-warning" id="download-excel-btn">
+                        <i class="bi bi-file-earmark-excel"></i> Ladda ner komplett Excel
+                    </button>
                     
                     <button class="btn btn-outline-primary" id="download-report-btn">
                         <i class="bi bi-file-earmark-text"></i> Ladda ner som JSON

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Säkerhetsrapport - Fullständig</title>
+    <title>Säkerhetsrapport - Analys med åtgärdsförslag och referenser</title>
     <style>
         /* PDF-optimerad design med mer mellanrum */
         body {
@@ -368,7 +368,6 @@
 
     <!-- Medelhög risk sårbarheter -->
     {% if organized_data.medium %}
-    <h2>Medelhög risk</h2>
     {% for vuln_name, vuln_data in organized_data.medium.items() %}
     <div class="vulnerability-section">
         <div class="vulnerability-header">
@@ -441,7 +440,6 @@
 
     <!-- Låg risk sårbarheter -->
     {% if organized_data.low %}
-    <h2>Låg risk</h2>
     {% for vuln_name, vuln_data in organized_data.low.items() %}
     <div class="vulnerability-section">
         <div class="vulnerability-header">
@@ -514,7 +512,6 @@
 
     <!-- Informativa fynd -->
     {% if organized_data.info %}
-    <h2>ℹ️ Informativa fynd</h2>
     {% for vuln_name, vuln_data in organized_data.info.items() %}
     <div class="vulnerability-section">
         <div class="vulnerability-header">
