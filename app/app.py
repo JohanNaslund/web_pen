@@ -3475,7 +3475,7 @@ def generate_pdf_from_html_with_type(html_content, report_type):
                     size: A4;
                     margin: 0.6cm;
                     @top-center {
-                        content: "Fullständig Säkerhetsrapport";
+                        content: "Säkerhetsrapport med information, rekommenderade åtgärder och referenser";
                         font-size: 9pt;
                         color: #666;
                     }
