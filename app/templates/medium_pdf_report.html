@@ -3,7 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Säkerhetsrapport - Medium</title>
+    <title>Säkerhetsrapport med förklaringar</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+        
+        .report-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .report-info p {
+            margin: 3px 0;
+            font-size: 10pt;
+        }
+        
+        .summary-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            flex: 1;
+            text-align: center;
+            padding: 20px 15px;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .summary-card.high-risk { background: linear-gradient(135deg, #dc3545, #c82333); }
+        .summary-card.medium-risk { background: linear-gradient(135deg, #ffc107, #e0a800); color: #212529; }
+        .summary-card.low-risk { background: linear-gradient(135deg, #17a2b8, #138496); }
+        .summary-card.info-risk { background: linear-gradient(135deg, #6c757d, #5a6268); }
+        
+        .summary-card h3 {
+            margin: 0 0 8px 0;
+            font-weight: bold;
+        }
+        
+        .summary-card p {
+            margin: 0;
+            font-weight: 500;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+            color: white;
+            margin-right: 8px;
+        }
+        
+        .risk-badge.high { background-color: #dc3545; }
+        .risk-badge.medium { background-color: #ffc107; color: #212529; }
+        .risk-badge.low { background-color: #17a2b8; }
+        .risk-badge.info { background-color: #6c757d; }
+        
+        .confidence-badge {
+            display: inline-block;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+        
+        .confidence-high { background-color: #d4edda; color: #155724; }
+        .confidence-medium { background-color: #fff3cd; color: #856404; }
+        .confidence-low { background-color: #f8d7da; color: #721c24; }
+        
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 9pt;
+            color: #666;
+            border-top: 1px solid #dee2e6;
+            padding-top: 15px;
+        }
+
+        @page {
+            size: A4;
+            margin: 1cm;
+            @top-center {
+                content: "Säkerhetsrapport med förklaringar";
+                font-size: 10pt;
+                color: #666;
+            }
+            @bottom-center {
+                content: counter(page) " av " counter(pages);
+                font-size: 10pt;
+                color: #666;
+            }
+        }
+        
+        body { font-size: 11pt; line-height: 1.4; }
+        .header h1 { font-size: 24pt; }
+        .summary-card h3 { font-size: 32pt; }
+        .summary-card p { font-size: 12pt; }
+        
+        .vulnerability-section {
+            margin-bottom: 30px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            page-break-inside: avoid;
+        }
+        
+        .vulnerability-header {
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+        }
+        
+        .vulnerability-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 14pt;
+        }
+        
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .detail-item {
+            margin-bottom: 15px;
+        }
+        
+        .detail-item h4 {
+            margin: 0 0 5px 0;
+            color: #495057;
+            font-size: 11pt;
+            font-weight: 600;
+        }
+        
+        .detail-item p {
+            margin: 0;
+            font-size: 10pt;
+            line-height: 1.4;
+        }        
+    </style>    
 </head>
 <body>
     <!-- Rapportsidhuvud -->
@@ -46,7 +212,8 @@
     {% for vuln_name, vuln_data in organized_data.high.items() %}
     <div class="vulnerability-section">
         <div class="vulnerability-header">
-            <h3><span class="risk-badge high">HIGH</span>{{ vuln_name }}</h3>
+            <h3><span class="risk-badge high">HIGH</span>{{ vuln_name }}
+            <span class="hit-count">({{ vuln_data.instances|length }} träffar)</span></h3>
         </div>
         
         <div class="vulnerability-details">
@@ -75,7 +242,8 @@
     {% for vuln_name, vuln_data in organized_data.medium.items() %}
     <div class="vulnerability-section">
         <div class="vulnerability-header">
-            <h3><span class="risk-badge medium">MEDIUM</span>{{ vuln_name }}</h3>
+            <h3><span class="risk-badge medium">MEDIUM</span>{{ vuln_name }}
+            <span class="hit-count">({{ vuln_data.instances|length }} träffar)</span></h3>
         </div>
         
         <div class="vulnerability-details">
@@ -104,7 +272,8 @@
     {% for vuln_name, vuln_data in organized_data.low.items() %}
     <div class="vulnerability-section">
         <div class="vulnerability-header">
-            <h3><span class="risk-badge low">LOW</span>{{ vuln_name }}</h3>
+            <h3><span class="risk-badge low">LOW</span>{{ vuln_name }}
+            <span class="hit-count">({{ vuln_data.instances|length }} träffar)</span></h3>
         </div>
         
         <div class="vulnerability-details">
@@ -133,7 +302,8 @@
     {% for vuln_name, vuln_data in organized_data.info.items() %}
     <div class="vulnerability-section">
         <div class="vulnerability-header">
-            <h3><span class="risk-badge info">INFO</span>{{ vuln_name }}</h3>
+            <h3><span class="risk-badge info">INFO</span>{{ vuln_name }}
+            <span class="hit-count">({{ vuln_data.instances|length }} träffar)</span></h3>
         </div>
         
         <div class="vulnerability-details">

@@ -7,7 +7,7 @@
         <!-- Display target URL and ZAP mode -->
         <div class="alert alert-info mb-4">
             <h5>Sessionskapturing och Inloggning</h5>
-            <p><strong>Aktuellt ZAP-läge:</strong> 
+            <p><strong>Aktuellt Attack Proxy-läge:</strong> 
                 <span class="badge 
                     {% if zap_mode == 'safe' %}bg-success
                     {% elif zap_mode == 'protect' %}bg-primary
@@ -72,7 +72,7 @@
                 <div class="card-body">
                     <p>Med proxykonfigurationen klar, följ dessa steg:</p>
                     <ol>
-                        <li>Besök målwebbplatsen <a href="{{ target_url }}" target="_blank">{{ target_url }}</a></li>
+                        <li>Med din Chrome eller Firefox kopplad via Attack Proxyn, besök målwebbplatsen <a href="{{ target_url }}" target="_blank">{{ target_url }}</a></li>
                         <li>Logga in med giltiga uppgifter</li>
                         <li>Surfa runt på de sidor du vill testa så att Attack proxyn kan fånga upp deras struktur</li>
                         <li>MYCKET VIKTIGT. Om du använder Protect, Standard eller Attack mode så kommer PEN-testningen automatisk replikera dina inmatningar med testdata. Var extremt försiktig.</li>

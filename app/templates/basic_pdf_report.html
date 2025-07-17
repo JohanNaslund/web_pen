@@ -3,7 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Säkerhetsrapport - Basic</title>
+    <title>Säkerhetsrapport</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+        
+        .report-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .report-info p {
+            margin: 3px 0;
+            font-size: 10pt;
+        }
+        
+        .summary-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            flex: 1;
+            text-align: center;
+            padding: 20px 15px;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .summary-card.high-risk { background: linear-gradient(135deg, #dc3545, #c82333); }
+        .summary-card.medium-risk { background: linear-gradient(135deg, #ffc107, #e0a800); color: #212529; }
+        .summary-card.low-risk { background: linear-gradient(135deg, #17a2b8, #138496); }
+        .summary-card.info-risk { background: linear-gradient(135deg, #6c757d, #5a6268); }
+        
+        .summary-card h3 {
+            margin: 0 0 8px 0;
+            font-weight: bold;
+        }
+        
+        .summary-card p {
+            margin: 0;
+            font-weight: 500;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+            color: white;
+            margin-right: 8px;
+        }
+        
+        .risk-badge.high { background-color: #dc3545; }
+        .risk-badge.medium { background-color: #ffc107; color: #212529; }
+        .risk-badge.low { background-color: #17a2b8; }
+        .risk-badge.info { background-color: #6c757d; }
+        
+        .confidence-badge {
+            display: inline-block;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+        
+        .confidence-high { background-color: #d4edda; color: #155724; }
+        .confidence-medium { background-color: #fff3cd; color: #856404; }
+        .confidence-low { background-color: #f8d7da; color: #721c24; }
+        
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 9pt;
+            color: #666;
+            border-top: 1px solid #dee2e6;
+            padding-top: 15px;
+        }
+        
+        @page {
+            size: A4;
+            margin: 1cm;
+            @top-center {
+                content: "Säkerhetsrapport";
+                font-size: 10pt;
+                color: #666;
+            }
+            @bottom-center {
+                content: counter(page) " av " counter(pages);
+                font-size: 10pt;
+                color: #666;
+            }
+        }
+        
+        body { font-size: 12pt; line-height: 1.5; }
+        .header h1 { font-size: 28pt; }
+        .summary-card h3 { font-size: 48pt; }
+        .summary-card p { font-size: 14pt; }
+        
+        .findings-overview {
+            background-color: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            border-left: 5px solid #007bff;
+        }
+        
+        .findings-overview h2 {
+            color: #007bff;
+            margin-bottom: 20px;
+            font-size: 18pt;
+        }
+        
+        .findings-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .findings-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .findings-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .finding-name {
+            font-weight: 500;
+            flex-grow: 1;
+        }
+        
+        .finding-count {
+            background-color: #007bff;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 10pt;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .conclusion {
+            background-color: #e8f5e8;
+            padding: 25px;
+            border-radius: 10px;
+            border-left: 5px solid #28a745;
+            margin-top: 40px;
+        }
+        
+        .conclusion h2 {
+            color: #28a745;
+            margin-bottom: 15px;
+        }
+    </style>
 </head>
 <body>
     <!-- Rapportsidhuvud -->

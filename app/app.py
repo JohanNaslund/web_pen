@@ -384,10 +384,10 @@ def target():
                 # Set ZAP mode
                 success = zap.set_mode(zap_mode)
                 if success:
-                    flash(f"ZAP-läge inställt på: {zap_mode.upper()}", "info")
+                    #flash(f"ZAP-läge inställt på: {zap_mode.upper()}", "info")
                     app.logger.info(f"ZAP mode set to: {zap_mode}")
                 else:
-                    flash(f"Kunde inte ställa in ZAP-läge på: {zap_mode.upper()}", "warning")
+                    flash(f"Kunde inte ställa in Attack Proxy-läge på: {zap_mode.upper()}", "warning")
                 
                 # Skapa ett nytt context för vårt nya target
                 context_name = "Target Context"
@@ -406,7 +406,7 @@ def target():
                     })
                     
                     if include_result['success']:
-                        flash(f"Context scope satt till: {domain}", "info")
+                        #flash(f"Context scope satt till: {domain}", "info")
                         app.logger.info(f"Set context scope to include: {include_pattern}")
                     else:
                         flash("Kunde inte sätta context scope", "warning")
@@ -423,7 +423,7 @@ def target():
                 
                 if session_result['success']:
                     session['zap_session_name'] = 'Session 1'
-                    flash("Session 'Session 1' skapad automatiskt för det nya target:et", "info")
+                    #flash("Session 'Session 1' skapad automatiskt för det nya target:et", "info")
                     app.logger.info("Created default HTTP session: Session 1")
                 else:
                     flash("Kunde inte skapa standardsession. Du kan skapa en manuellt.", "warning")
@@ -433,9 +433,9 @@ def target():
                 app.logger.error(f"Error configuring ZAP for new target: {str(e)}")
                 flash(f"Fel vid konfiguration av ZAP: {str(e)}", "warning")
         else:
-            flash("ZAP är inte tillgänglig, läge och scope kunde inte ställas in", "warning")
+            flash("Attack Proxy är inte tillgänglig, läge och scope kunde inte ställas in", "warning")
         
-        flash(f'Nytt mål konfigurerat: {target_url} (Gammal ZAP-data rensad)', 'success')
+        #flash(f'Nytt mål konfigurerat: {target_url} (Gammal ZAP-data rensad)', 'success')
         return redirect(url_for('session_capture'))
         
     return render_template('target.html')
@@ -457,7 +457,7 @@ def session_capture():
         # Set ZAP mode
         success = zap.set_mode(zap_mode)
         if success:
-            flash(f"ZAP-läge inställt på: {zap_mode.upper()}", "info")
+            #flash(f"ZAP-läge inställt på: {zap_mode.upper()}", "info")
             
             # Check if we already have a session name, if not create "Session 1"
             if not session.get('zap_session_name'):
@@ -473,9 +473,9 @@ def session_capture():
                 else:
                     flash("Kunde inte skapa standardsession. Du kan fortsätta utan sessionsnamn.", "warning")
         else:
-            flash(f"Kunde inte ställa in ZAP-läge på: {zap_mode.upper()}", "warning")
+            flash(f"Kunde inte ställa in Attack Proxy-läge på: {zap_mode.upper()}", "warning")
     else:
-        flash("ZAP är inte tillgänglig, läge kunde inte ställas in", "warning")
+        flash("Attack Proxy är inte tillgänglig, läge kunde inte ställas in", "warning")
     
     return render_template(
         'session_capture.html', 
@@ -1540,12 +1540,12 @@ def _zap_api_call(endpoint, params=None, timeout=5):
     url = f"http://{ZAP_HOST}:{ZAP_API_PORT}/JSON/{endpoint}/"
     
     try:
-        app.logger.debug(f"Making ZAP API call to: {url}")
+        # app.logger.debug(f"Making ZAP API call to: {url}")
         
         response = requests.get(url, params=params, timeout=timeout)
         
         if response.status_code == 200:
-            app.logger.debug(f"API call to {endpoint} successful")
+            #app.logger.debug(f"API call to {endpoint} successful")
             return {
                 'success': True,
                 'data': response.json()
@@ -2407,7 +2407,7 @@ def api_zap_alerts_by_risk():
         
         # Logga för felsökning
         # app.logger.debug(f"Processed data: {json.dumps(processed_data)}")
-        app.logger.debug(f"Summary: {json.dumps(summary)}")
+        # app.logger.debug(f"Summary: {json.dumps(summary)}")
         
         return jsonify(result)
     except Exception as e:
@@ -3774,408 +3774,20 @@ def generate_pdf_from_html_with_type(html_content, report_type):
     try:
         # Bas CSS som gäller för alla rapporter
         base_css = """
-        body {
-            font-family: Arial, sans-serif;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }
         
-        .header {
-            text-align: center;
-            border-bottom: 3px solid #007bff;
-            padding-bottom: 30px;
-            margin-bottom: 40px;
-        }
-        
-        .header h1 {
-            color: #007bff;
-            margin-bottom: 20px;
-        }
-        
-        .report-info {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 30px;
-            border-left: 4px solid #007bff;
-        }
-        
-        .report-info p {
-            margin: 3px 0;
-            font-size: 10pt;
-        }
-        
-        .summary-grid {
-            display: flex;
-            justify-content: space-between;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .summary-card {
-            flex: 1;
-            text-align: center;
-            padding: 20px 15px;
-            border-radius: 10px;
-            color: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .summary-card.high-risk { background: linear-gradient(135deg, #dc3545, #c82333); }
-        .summary-card.medium-risk { background: linear-gradient(135deg, #ffc107, #e0a800); color: #212529; }
-        .summary-card.low-risk { background: linear-gradient(135deg, #17a2b8, #138496); }
-        .summary-card.info-risk { background: linear-gradient(135deg, #6c757d, #5a6268); }
-        
-        .summary-card h3 {
-            margin: 0 0 8px 0;
-            font-weight: bold;
-        }
-        
-        .summary-card p {
-            margin: 0;
-            font-weight: 500;
-        }
-        
-        .risk-badge {
-            display: inline-block;
-            padding: 3px 6px;
-            border-radius: 3px;
-            font-size: 8pt;
-            font-weight: bold;
-            color: white;
-            margin-right: 8px;
-        }
-        
-        .risk-badge.high { background-color: #dc3545; }
-        .risk-badge.medium { background-color: #ffc107; color: #212529; }
-        .risk-badge.low { background-color: #17a2b8; }
-        .risk-badge.info { background-color: #6c757d; }
-        
-        .confidence-badge {
-            display: inline-block;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 8pt;
-            font-weight: bold;
-        }
-        
-        .confidence-high { background-color: #d4edda; color: #155724; }
-        .confidence-medium { background-color: #fff3cd; color: #856404; }
-        .confidence-low { background-color: #f8d7da; color: #721c24; }
-        
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 9pt;
-            color: #666;
-            border-top: 1px solid #dee2e6;
-            padding-top: 15px;
-        }
         """
         
         # Specifik CSS för varje rapporttyp
         type_specific_css = {
             'basic': """
-                @page {
-                    size: A4;
-                    margin: 1cm;
-                    @top-center {
-                        content: "Säkerhetsrapport - Basic";
-                        font-size: 10pt;
-                        color: #666;
-                    }
-                    @bottom-center {
-                        content: counter(page) " av " counter(pages);
-                        font-size: 10pt;
-                        color: #666;
-                    }
-                }
-                
-                body { font-size: 12pt; line-height: 1.5; }
-                .header h1 { font-size: 28pt; }
-                .summary-card h3 { font-size: 48pt; }
-                .summary-card p { font-size: 14pt; }
-                
-                .findings-overview {
-                    background-color: #f8f9fa;
-                    padding: 30px;
-                    border-radius: 10px;
-                    border-left: 5px solid #007bff;
-                }
-                
-                .findings-overview h2 {
-                    color: #007bff;
-                    margin-bottom: 20px;
-                    font-size: 18pt;
-                }
-                
-                .findings-list {
-                    list-style: none;
-                    padding: 0;
-                }
-                
-                .findings-list li {
-                    padding: 10px 0;
-                    border-bottom: 1px solid #dee2e6;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                
-                .findings-list li:last-child {
-                    border-bottom: none;
-                }
-                
-                .finding-name {
-                    font-weight: 500;
-                    flex-grow: 1;
-                }
-                
-                .finding-count {
-                    background-color: #007bff;
-                    color: white;
-                    padding: 5px 10px;
-                    border-radius: 20px;
-                    font-size: 10pt;
-                    font-weight: bold;
-                    margin-left: 10px;
-                }
-                
-                .conclusion {
-                    background-color: #e8f5e8;
-                    padding: 25px;
-                    border-radius: 10px;
-                    border-left: 5px solid #28a745;
-                    margin-top: 40px;
-                }
-                
-                .conclusion h2 {
-                    color: #28a745;
-                    margin-bottom: 15px;
-                }
+
             """,
             
             'medium': """
-                @page {
-                    size: A4;
-                    margin: 1cm;
-                    @top-center {
-                        content: "Säkerhetsrapport - Medium";
-                        font-size: 10pt;
-                        color: #666;
-                    }
-                    @bottom-center {
-                        content: counter(page) " av " counter(pages);
-                        font-size: 10pt;
-                        color: #666;
-                    }
-                }
-                
-                body { font-size: 11pt; line-height: 1.4; }
-                .header h1 { font-size: 24pt; }
-                .summary-card h3 { font-size: 32pt; }
-                .summary-card p { font-size: 12pt; }
-                
-                .vulnerability-section {
-                    margin-bottom: 30px;
-                    border: 1px solid #dee2e6;
-                    border-radius: 8px;
-                    padding: 20px;
-                    background-color: #fff;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                    page-break-inside: avoid;
-                }
-                
-                .vulnerability-header {
-                    border-bottom: 2px solid #e9ecef;
-                    margin-bottom: 15px;
-                    padding-bottom: 10px;
-                }
-                
-                .vulnerability-header h3 {
-                    margin: 0;
-                    color: #333;
-                    font-size: 14pt;
-                }
-                
-                .detail-grid {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 15px;
-                    margin-bottom: 15px;
-                }
-                
-                .detail-item {
-                    margin-bottom: 15px;
-                }
-                
-                .detail-item h4 {
-                    margin: 0 0 5px 0;
-                    color: #495057;
-                    font-size: 11pt;
-                    font-weight: 600;
-                }
-                
-                .detail-item p {
-                    margin: 0;
-                    font-size: 10pt;
-                    line-height: 1.4;
-                }
+ 
             """,
             
             'full': """
-                @page {
-                    size: A4;
-                    margin: 0.6cm;
-                    @top-center {
-                        content: "Säkerhetsrapport med information, rekommenderade åtgärder och referenser";
-                        font-size: 9pt;
-                        color: #666;
-                    }
-                    @bottom-center {
-                        content: counter(page) " av " counter(pages);
-                        font-size: 9pt;
-                        color: #666;
-                    }
-                }
-                
-                body { font-size: 10pt; line-height: 1.3; }
-                .header h1 { font-size: 20pt; }
-                .summary-card h3 { font-size: 24pt; }
-                .summary-card p { font-size: 10pt; }
-                
-                .vulnerability-section {
-                    margin-bottom: 20px;
-                    border: 1px solid #dee2e6;
-                    border-radius: 6px;
-                    padding: 15px;
-                    background-color: #fff;
-                    page-break-inside: avoid;
-                }
-                
-                .vulnerability-header {
-                    border-bottom: 1px solid #e9ecef;
-                    margin-bottom: 10px;
-                    padding-bottom: 8px;
-                }
-                
-                .vulnerability-header h3 {
-                    margin: 0;
-                    color: #333;
-                    font-size: 12pt;
-                    display: flex;
-                    align-items: center;
-                }
-                
-                .detail-grid {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr 1fr;
-                    gap: 10px;
-                    margin-bottom: 10px;
-                }
-                
-                .detail-item h4 {
-                    margin: 0 0 3px 0;
-                    color: #495057;
-                    font-size: 9pt;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
-                
-                .detail-item p {
-                    margin: 0;
-                    font-size: 9pt;
-                    line-height: 1.3;
-                }
-                
-                .description-text {
-                    background-color: #f8f9fa;
-                    padding: 8px;
-                    border-radius: 4px;
-                    border-left: 3px solid #007bff;
-                    font-size: 9pt;
-                    line-height: 1.3;
-                    margin-bottom: 10px;
-                }
-                
-                .instances-section {
-                    margin-top: 12px;
-                }
-                
-                .instances-header {
-                    background-color: #e9ecef;
-                    padding: 6px 8px;
-                    border-radius: 4px;
-                    font-weight: 600;
-                    font-size: 9pt;
-                    margin-bottom: 5px;
-                }
-                
-                .instance-row {
-                    background-color: #f8f9fa;
-                    margin-bottom: 3px;
-                    border-radius: 3px;
-                    overflow: hidden;
-                    border-left: 3px solid #6c757d;
-                }
-                
-                .instance-url {
-                    background-color: #e9ecef;
-                    padding: 4px 8px;
-                    font-size: 8pt;
-                    font-weight: 500;
-                    word-break: break-all;
-                }
-                
-                .instance-details {
-                    padding: 4px 8px;
-                    font-size: 8pt;
-                }
-                
-                .param-attack-row {
-                    display: flex;
-                    gap: 15px;
-                }
-                
-                .param-section, .attack-section {
-                    flex: 1;
-                }
-                
-                .param-label, .attack-label {
-                    font-weight: 600;
-                    color: #495057;
-                    margin-bottom: 2px;
-                }
-                
-                .param-value, .attack-value {
-                    background-color: #fff;
-                    padding: 3px 5px;
-                    border-radius: 2px;
-                    border: 1px solid #dee2e6;
-                    word-break: break-all;
-                    font-family: monospace;
-                }
-                
-                .more-instances {
-                    background-color: #fff3cd;
-                    border: 1px solid #ffeaa7;
-                    padding: 6px 8px;
-                    border-radius: 4px;
-                    margin-top: 5px;
-                    font-size: 8pt;
-                    font-style: italic;
-                    color: #856404;
-                }
-                
-                .section-header {
-                    color: #333;
-                    font-size: 14pt;
-                    margin: 20px 0 15px 0;
-                    padding-bottom: 5px;
-                    border-bottom: 2px solid #007bff;
-                }
             """
         }
         
@@ -4859,7 +4471,7 @@ def get_zap_alerts_data_fixed(target_url):
                 
                 if detail_response.status_code == 200:
                     detail_json = detail_response.json()
-                    app.logger.debug(f"Detail response för {alert_id}: {list(detail_json.keys())}")
+                    # app.logger.debug(f"Detail response för {alert_id}: {list(detail_json.keys())}")
                     
                     if 'alert' in detail_json:
                         detail = detail_json['alert']
@@ -4879,7 +4491,7 @@ def get_zap_alerts_data_fixed(target_url):
                                         'tags': detail.get('tags', {})
                                     })
                                     details_fetched += 1
-                                    app.logger.debug(f"Uppdaterade alert {alert_id} med beskrivning: {detail.get('description', 'missing')[:50]}...")
+                                    #app.logger.debug(f"Uppdaterade alert {alert_id} med beskrivning: {detail.get('description', 'missing')[:50]}...")
                                     break
                 else:
                     app.logger.warning(f"Detail API failed for {alert_id}: {detail_response.status_code}")

@@ -859,14 +859,33 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // PDF-nedladdning hantering
+    // PDF-nedladdning hantering med förbättrad loading på huvudknappen
     document.querySelectorAll('.pdf-download-btn').forEach(button => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
             const reportType = this.dataset.reportType;
             const originalText = this.innerHTML;
             
-            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar PDF...';
-            this.disabled = true;
+            // Hitta huvudknappen (dropdown-toggle)
+            const mainPdfButton = document.querySelector('.btn-outline-success.dropdown-toggle');
+            const originalMainText = mainPdfButton.innerHTML;
+            
+            // Stäng dropdown-menyn
+            const dropdownMenu = this.closest('.dropdown-menu');
+            if (dropdownMenu) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownMenu.previousElementSibling);
+                if (dropdown) {
+                    dropdown.hide();
+                }
+            }
+            
+            // Visa laddningsindikator på huvudknappen
+            mainPdfButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar PDF...';
+            mainPdfButton.disabled = true;
+            
+            // Visa även loading på den klickade länken
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Genererar...';
             
             fetch(`/api/download-pdf-report/${reportType}`)
                 .then(response => {
@@ -876,21 +895,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     return response.blob();
                 })
                 .then(blob => {
+                    // Skapa download-länk
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
                     
                     const reportNames = {
-                        'basic': 'basic_slutkund',
+                        'basic': 'enkel_kundrapport',
                         'medium': 'medium_detaljerad', 
-                        'full': 'fullstandig'
+                        'full': 'teknisk_fullstandig'
                     };
                     
                     a.download = `sakerheterapport_${reportNames[reportType]}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.pdf`;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
                     
                     showSuccessMessage(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} rapport har laddats ner!`);
                 })
@@ -899,8 +920,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     showErrorMessage('Kunde inte generera PDF-rapporten. Vänligen försök igen.');
                 })
                 .finally(() => {
+                    // Återställ båda knapparna
+                    mainPdfButton.innerHTML = originalMainText;
+                    mainPdfButton.disabled = false;
                     this.innerHTML = originalText;
-                    this.disabled = false;
                 });
         });
     });
@@ -929,6 +952,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Excel-nedladdning hantering
     const downloadExcelBtn = document.getElementById('download-excel-btn');
     if (downloadExcelBtn) {
         downloadExcelBtn.addEventListener('click', function() {
@@ -974,7 +998,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.disabled = false;
                 });
         });
-    }    
+    }
     
     // Debug-funktioner
     if (window.REPORT_CONFIG && window.REPORT_CONFIG.debug_mode) {

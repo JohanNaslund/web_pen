@@ -76,6 +76,13 @@ body {
     z-index: 1080;
 }
 
+/* Träffar styling */
+.hit-count {
+    color: #7f8c8d;
+    font-style: italic;
+    font-weight: normal;
+    font-size: 0.9em;
+}
 .toast {
     max-width: 350px;
     background-color: rgba(255, 255, 255, 0.95);
@@ -635,6 +642,15 @@ pre {
     font-weight: 500;
 }
 
+.fixed-height-100{
+    height: 100px;
+}
+.fixed-height-150{
+    height: 150px;
+}
+.fixed-height-200{
+    height: 200px;
+}
 /* Responsiv design */
 @media (max-width: 768px) {
     #alertDetailsModal .modal-dialog {

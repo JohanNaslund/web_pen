@@ -13,7 +13,7 @@
                     <h5>Målwebbplats: <span id="target_url_display">{{ target_url }}</span></h5>
                     <p>Följ stegen nedan för att skanna efter sårbarheter. Processen är automatiserad, men kan ta tid beroende på webbplatsens storlek och komplexitet.</p>
                     {% if zap_session_name %}
-                    <p class="mt-2 mb-0"><strong>Aktiv ZAP-session:</strong> <span class="badge bg-success">{{ zap_session_name }}</span></p>
+                    <p class="mt-2 mb-0"><strong>Aktiv session:</strong> <span class="badge bg-success">{{ zap_session_name }}</span></p>
                     {% else %}
                     <p class="mt-2 mb-0 text-warning"><strong>Varning:</strong> Ingen session är aktiverad. Gå tillbaka till föregående steg för att skapa eller aktivera en session.</p>
                     {% endif %}
@@ -26,7 +26,7 @@
                             <div class="card-header bg-light">
                                 <h5>Steg 1: Spider</h5>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body fixed-height-200  d-flex flex-column">
                                 <p>Kartlägger webbplatsens struktur och hittar länkar.</p>
                                 <div class="progress mb-3 d-none" id="spider-progress-container">
                                     <div class="progress-bar" id="spider-progress" role="progressbar" style="width: 0%"></div>
@@ -34,11 +34,13 @@
                                 <div id="spider-status" class="mb-3">
                                     Status: <span class="badge bg-secondary">Inte startad</span>
                                 </div>
-                                <form method="POST" action="/scan">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <input type="hidden" name="action" value="start_spider">
-                                    <button type="submit" class="btn btn-primary" id="start-spider-btn">Starta Spider</button>
-                                </form>
+                                <div class="text-center mt-auto">
+                                    <form method="POST" action="/scan">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <input type="hidden" name="action" value="start_spider">
+                                        <button type="submit" class="btn btn-primary" id="start-spider-btn">Starta Spider</button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -49,7 +51,7 @@
                             <div class="card-header bg-light">
                                 <h5>Steg 2: Ajax Spider</h5>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body fixed-height-200 d-flex flex-column">
                                 <p>Crawlar JavaScript-baserade applikationer.</p>
                                 <div class="progress mb-3 d-none" id="ajax-spider-progress-container">
                                     <div class="progress-bar" id="ajax-spider-progress" role="progressbar" style="width: 0%"></div>
@@ -57,11 +59,13 @@
                                 <div id="ajax-spider-status" class="mb-3">
                                     Status: <span class="badge bg-secondary">Inte startad</span>
                                 </div>
-                                <form method="POST" action="/scan">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <input type="hidden" name="action" value="start_ajax_spider">
-                                    <button type="submit" class="btn btn-primary" id="start-ajax-spider-btn">Starta Ajax Spider</button>
-                                </form>
+                                <div class="text-center mt-auto">
+                                    <form method="POST" action="/scan">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <input type="hidden" name="action" value="start_ajax_spider">
+                                        <button type="submit" class="btn btn-primary" id="start-ajax-spider-btn">Starta Ajax Spider</button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -70,21 +74,23 @@
                     <div class="col-md-4">
                         <div class="card mb-3">
                             <div class="card-header bg-light">
-                                <h5>Steg 3: Aktiv scanning</h5>
+                                <h5>Steg 3: Aktiv attackscanning</h5>
                             </div>
-                            <div class="card-body">
-                                <p>Söker efter sårbarheter som XSS, injection m.m.</p>
+                            <div class="card-body  fixed-height-200  d-flex flex-column">
+                                <p>Aktiv attack av sårbarheter som XSS, SQL injection m.m.</p>
                                 <div class="progress mb-3 d-none" id="active-scan-progress-container">
                                     <div class="progress-bar" id="active-scan-progress" role="progressbar" style="width: 0%"></div>
                                 </div>
                                 <div id="active-scan-status" class="mb-3">
                                     Status: <span class="badge bg-secondary">Inte startad</span>
                                 </div>
-                                <form method="POST" action="/scan">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <input type="hidden" name="action" value="start_active_scan">
-                                    <button type="submit" class="btn btn-primary" id="start-active-scan-btn" {% if not session.get('spider_scan_id') %}disabled{% endif %}>Starta Aktiv Scanning</button>
-                                </form>
+                                <div class="text-center mt-auto">
+                                    <form method="POST" action="/scan">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <input type="hidden" name="action" value="start_active_scan">
+                                        <button type="submit" class="btn btn-primary" id="start-active-scan-btn" {% if not session.get('spider_scan_id') %}disabled{% endif %}>Starta Aktiv Scanning</button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -99,7 +105,7 @@
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="card bg-light">
-                                    <div class="card-body text-center">
+                                    <div class="card-body text-center fixed-height-100">
                                         <h5>ZAP Alerts</h5>
                                         <h2 id="zap-alerts-count">0</h2>
                                     </div>
@@ -107,7 +113,7 @@
                             </div>
                             <div class="col-md-4">
                                 <div class="card bg-light">
-                                    <div class="card-body text-center">
+                                    <div class="card-body text-center fixed-height-100">
                                         <h5>Ajax Spider URLs</h5>
                                         <h2 id="ajax-urls-count">0</h2>
                                     </div>
@@ -115,7 +121,7 @@
                             </div>
                             <div class="col-md-4">
                                 <div class="card bg-light">
-                                    <div class="card-body text-center">
+                                    <div class="card-body text-center fixed-height-100">
                                         <h5>Total Status</h5>
                                         <span class="badge bg-secondary" id="total-status-badge">Inte slutförd</span>
                                     </div>
