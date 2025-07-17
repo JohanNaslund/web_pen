@@ -263,11 +263,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                             <div class="text-end">
                                 <span class="badge bg-primary">${session.url_count} URLs</span>
-                                ${session.has_cookies ? '<span class="badge bg-success ms-1">🍪</span>' : '<span class="badge bg-secondary ms-1">No cookies</span>'}
+                                ${session.has_cookies ? 
+                                    '<span class="badge bg-success ms-1">Cookies</span>' : 
+                                    '<span class="badge bg-secondary ms-1">Inga cookies</span>'}
                             </div>
-                        </div>
-                        <div class="mt-1">
-                            <small class="text-muted">${escapeHtml(session.target_url)}</small>
                         </div>
                     </div>
                 </div>
@@ -275,8 +274,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         savedSessions.innerHTML = html;
-    }
-    
+    }    
     /**
      * Populera dropdown-menyer med sessioner
      */
@@ -570,11 +568,46 @@ document.addEventListener('DOMContentLoaded', function() {
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     function formatDate(timestamp) {
-        const date = new Date(timestamp * 1000);
-        return date.toLocaleDateString('sv-SE') + ' ' + date.toLocaleTimeString('sv-SE');
+        // Kontrollera om timestamp är giltigt
+        if (!timestamp || timestamp === 0 || isNaN(timestamp)) {
+            return 'N/A';
+        }
+        
+        // Konvertera till nummer om det är en sträng
+        const numTimestamp = Number(timestamp);
+        
+        // Kontrollera om det är ett giltigt nummer
+        if (isNaN(numTimestamp)) {
+            return 'N/A';
+        }
+        
+        // Kontrollera om timestamp är i millisekunder (mer än 10^10) eller sekunder
+        let timestampMs;
+        if (numTimestamp > 10000000000) {
+            // Redan i millisekunder
+            timestampMs = numTimestamp;
+        } else {
+            // I sekunder, konvertera till millisekunder
+            timestampMs = numTimestamp * 1000;
+        }
+        
+        // Skapa Date-objekt och kontrollera giltighet
+        const date = new Date(timestampMs);
+        
+        if (isNaN(date.getTime())) {
+            return 'N/A';
+        }
+        
+        try {
+            return date.toLocaleDateString('sv-SE') + ' ' + date.toLocaleTimeString('sv-SE');
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'N/A';
+        }
     }
+
     
     function getSessionClass(sessionLabel) {
         const label = sessionLabel.toLowerCase();

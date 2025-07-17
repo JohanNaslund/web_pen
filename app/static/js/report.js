@@ -148,7 +148,7 @@ function showModalError(errorMessage) {
  * Fyll i modal med alert-data
  */
 function populateAlertModal(alertData) {
-    console.log('Populating modal with data:', alertData);
+
     
     // Ta bort loading overlay
     const modalBody = document.querySelector('#alertDetailsModal .modal-body');
@@ -555,7 +555,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ====================================================
     
     function fetchVulnerabilities() {
-        console.log('Fetching vulnerabilities...');
+        
         fetch('/api/zap-alerts-by-risk')
             .then(response => response.json())
             .then(data => {
@@ -566,7 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                console.log('Vulnerabilities fetched successfully');
+                
                 updateCounts(data);
                 generateRecommendations(data);
                 populateVulnerabilityAccordions(data);

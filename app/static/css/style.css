@@ -651,6 +651,9 @@ pre {
 .fixed-height-200{
     height: 200px;
 }
+.fixed-height-250{
+    height: 250px;
+}
 /* Responsiv design */
 @media (max-width: 768px) {
     #alertDetailsModal .modal-dialog {

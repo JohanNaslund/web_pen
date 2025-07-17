@@ -544,7 +544,6 @@ class AccessControlManager:
                 return line[7:].strip()
         return ""
     
-# Lägg till dessa saknade metoder i AccessControlManager-klassen
 
     def list_collected_sessions(self):
         """Lista alla insamlade sessioner"""
@@ -558,25 +557,49 @@ class AccessControlManager:
                     with open(filepath, 'r') as f:
                         session_data = json.load(f)
                     
+                    # Hantera både gamla 'collection_time' och nya 'timestamp' fält
+                    timestamp = session_data.get('timestamp') or session_data.get('collection_time', 0)
+                    
+                    # Om ingen timestamp finns, försök extrahera från filnamnet
+                    if not timestamp:
+                        try:
+                            # Extrahera timestamp från filnamn: session_label_TIMESTAMP.json
+                            import re
+                            match = re.search(r'session_.*_(\d+)\.json$', filename)
+                            if match:
+                                timestamp = int(match.group(1))
+                        except:
+                            timestamp = 0
+                    
+                    # Kontrollera om sessionen har cookies
+                    has_cookies = False
+                    cookies = session_data.get('cookies', '')
+                    if isinstance(cookies, str):
+                        has_cookies = bool(cookies.strip())
+                    elif isinstance(cookies, dict):
+                        has_cookies = bool(cookies)
+                    
                     sessions.append({
                         'filename': filename,
                         'session_label': session_data.get('session_label', 'Unknown'),
                         'target_url': session_data.get('target_url', ''),
                         'url_count': session_data.get('url_count', 0),
-                        'collection_time': session_data.get('collection_time', 0),
+                        'timestamp': timestamp,  # Konsekvent använd 'timestamp'
+                        'collection_time': timestamp,  # Bakåtkompatibilitet
+                        'has_cookies': has_cookies,  # Lägg till has_cookies för JavaScript
                         'categories': self._get_url_categories(session_data.get('urls', [])),
                         'context_name': session_data.get('context_name', ''),
                         'scope_pattern': session_data.get('scope_pattern', '')
                     })
             
             # Sortera efter tid (nyast först)
-            sessions.sort(key=lambda x: x['collection_time'], reverse=True)
+            sessions.sort(key=lambda x: x['timestamp'], reverse=True)
             return sessions
             
         except Exception as e:
             print(f"Error listing sessions: {str(e)}")
             return []
-    
+            
     def get_session_urls(self, session_filename):
         """Hämta URL:er från en specifik session"""
         try:

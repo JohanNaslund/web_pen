@@ -30,6 +30,8 @@ import pandas as pd
 from datetime import datetime
 import io
 from flask import make_response
+import shutil
+import glob
 
 active_recordings = {}
 
@@ -126,7 +128,84 @@ session_manager = SessionManager(storage_path='./data/sessions')
 
 access_control_manager = AccessControlManager(zap)
 
-
+def cleanup_old_data():
+    """Rensa all gammal data från föregående tester när en ny target konfigureras"""
+    cleanup_results = {
+        'sessions_deleted': 0,
+        'tests_deleted': 0,
+        'reports_deleted': 0,
+        'errors': []
+    }
+    
+    try:
+        # Rensa data/access_control/sessions
+        sessions_dir = './data/access_control/sessions'
+        if os.path.exists(sessions_dir):
+            try:
+                files = glob.glob(os.path.join(sessions_dir, '*'))
+                for file_path in files:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        cleanup_results['sessions_deleted'] += 1
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                        cleanup_results['sessions_deleted'] += 1
+                app.logger.info(f"Cleaned {cleanup_results['sessions_deleted']} items from sessions directory")
+            except Exception as e:
+                error_msg = f"Error cleaning sessions directory: {str(e)}"
+                cleanup_results['errors'].append(error_msg)
+                app.logger.error(error_msg)
+        
+        # Rensa data/access_control/tests
+        tests_dir = './data/access_control/tests'
+        if os.path.exists(tests_dir):
+            try:
+                files = glob.glob(os.path.join(tests_dir, '*'))
+                for file_path in files:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        cleanup_results['tests_deleted'] += 1
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                        cleanup_results['tests_deleted'] += 1
+                app.logger.info(f"Cleaned {cleanup_results['tests_deleted']} items from tests directory")
+            except Exception as e:
+                error_msg = f"Error cleaning tests directory: {str(e)}"
+                cleanup_results['errors'].append(error_msg)
+                app.logger.error(error_msg)
+        
+        # Rensa data/reports
+        reports_dir = './data/reports'
+        if os.path.exists(reports_dir):
+            try:
+                files = glob.glob(os.path.join(reports_dir, '*'))
+                for file_path in files:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        cleanup_results['reports_deleted'] += 1
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                        cleanup_results['reports_deleted'] += 1
+                app.logger.info(f"Cleaned {cleanup_results['reports_deleted']} items from reports directory")
+            except Exception as e:
+                error_msg = f"Error cleaning reports directory: {str(e)}"
+                cleanup_results['errors'].append(error_msg)
+                app.logger.error(error_msg)
+        
+        # Skapa katalogerna igen om de inte finns
+        os.makedirs(sessions_dir, exist_ok=True)
+        os.makedirs(tests_dir, exist_ok=True)
+        os.makedirs(reports_dir, exist_ok=True)
+        
+        app.logger.info(f"Data cleanup completed. Sessions: {cleanup_results['sessions_deleted']}, Tests: {cleanup_results['tests_deleted']}, Reports: {cleanup_results['reports_deleted']}")
+        
+        return cleanup_results
+        
+    except Exception as e:
+        error_msg = f"Critical error during data cleanup: {str(e)}"
+        cleanup_results['errors'].append(error_msg)
+        app.logger.error(error_msg)
+        return cleanup_results
 
 @app.route('/access-control')
 def access_control():
@@ -334,7 +413,24 @@ def target():
         # Se till att URL:en har ett protokoll
         if not target_url.startswith(('http://', 'https://')):
             target_url = 'http://' + target_url
-        
+
+        try:
+            app.logger.info("Starting automatic data cleanup for new target...")
+            cleanup_results = cleanup_old_data()
+            
+            # Informera användaren om vad som rensades
+            total_deleted = cleanup_results['sessions_deleted'] + cleanup_results['tests_deleted'] + cleanup_results['reports_deleted']
+            if total_deleted > 0:
+                flash(f'Gammal data rensad: {cleanup_results["sessions_deleted"]} sessioner, {cleanup_results["tests_deleted"]} tester, {cleanup_results["reports_deleted"]} rapporter', 'info')
+            
+            if cleanup_results['errors']:
+                for error in cleanup_results['errors']:
+                    flash(f'Varning vid datarensning: {error}', 'warning')
+                    
+        except Exception as e:
+            app.logger.error(f"Error during data cleanup: {str(e)}")
+            flash(f'Fel vid datarensning: {str(e)}', 'warning')
+
         # AUTOMATISK ZAP RESET - Rensa all gammal data innan vi sätter upp nytt target
         try:
             app.logger.info("Starting automatic ZAP reset for new target...")
