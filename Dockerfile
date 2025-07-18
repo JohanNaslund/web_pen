@@ -1,57 +1,45 @@
-# Dockerfile för huvudapplikationen
-FROM python:3.9-slim
+# Build stage
+FROM python:3.11-bullseye as builder
 
-# Installera systempaket och build dependencies
+# Installera build dependencies
 RUN apt-get update && apt-get install -y \
-    curl \
-    wget \
-    git \
-    docker.io \
     build-essential \
-    libxml2-dev \
-    libxslt1-dev \
-    libffi-dev \
-    libssl-dev \
-    libcairo2-dev \
     libpango1.0-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libpangoft2-1.0-0 \
     libgdk-pixbuf2.0-dev \
+    libcairo2-dev \
     libffi-dev \
-    shared-mime-info \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Uppgradera pip först
-RUN pip install --upgrade pip
-
-# Skapa applikationsmapp
-WORKDIR /app
-
-# Kopiera requirements först för bättre caching
+# Kopiera requirements och installera alla Python packages
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Installera Python-dependencies med timeout och retries
-RUN pip install --no-cache-dir --timeout 120 --retries 3 -r requirements.txt
+# Runtime stage
+FROM python:3.11-bullseye
 
-# Kopiera applikationskod från app/ mappen
-COPY app/ ./app/
+# Installera runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libpango-1.0-0 \
+    libharfbuzz0b \
+    libpangoft2-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libcairo2 \
+    libffi7 \
+    fontconfig \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 
-# Skapa nödvändiga mappar
-RUN mkdir -p /app/results /app/logs /app/static/reports
+# Kopiera Python packages från builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Sätt rättigheter
-RUN chmod +x /app/app/app.py
+WORKDIR /app
+COPY . .
 
-# Exponera port
 EXPOSE 5001
-
-# Miljövariabler
-ENV FLASK_APP=app/app.py
-ENV FLASK_ENV=production
-ENV PYTHONPATH=/app
-
-# Hälsokontroll
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5001/api/health || exit 1
-
-# Starta applikationen från app mappen
-WORKDIR /app/app
-CMD ["python", "app.py"]
+CMD ["python", "app/app.py"]

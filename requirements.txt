@@ -1,57 +1,25 @@
-# Flask och webframework - kompatibla versioner
+
+# Core Flask dependencies
 Flask==2.3.3
-Flask-CORS==4.0.0
 Flask-WTF==1.1.1
 Werkzeug==2.3.7
 
-# ZAP API integration  
-python-owasp-zap-v2.4==0.0.21
-
-# HTTP requests
-requests==2.31.0
-urllib3==2.0.7
-
 # PDF generation
-weasyprint==60.2
-Pillow==10.1.0
+WeasyPrint==61.2
 
-# Excel export
+# Data processing - mycket stabila versioner
+numpy==1.23.5
+pandas==1.5.3
 openpyxl==3.1.2
-pandas==2.1.4
 
-# JSON och datahantering
-jsonschema==4.19.2
+# ZAP integration
+python-owasp-zap-v2.4==0.0.21
+requests==2.31.0
 
-# Threading och async
-eventlet==0.33.3
-
-# Säkerhet
-cryptography==41.0.7
-
-# Utilities
-python-dateutil==2.8.2
-pytz==2023.3
-
-# System monitoring för health checks
-psutil==5.9.6
-
-# Web scraping och parsing
-lxml==4.9.4
+# HTML parsing
 beautifulsoup4==4.12.2
+lxml==4.9.3
 
-# Development (kan tas bort i produktion)
-pytest==7.4.3
-pytest-flask==1.3.0
-
-# Formulär och validering
-WTForms==3.0.1
-
-# Jinja2 template engine (explicit version för kompatibilitet)
-Jinja2==3.1.2
-MarkupSafe==2.1.3
-
-# Itsdangerous för säker serialisering
-itsdangerous==2.1.2
-
-# Click för CLI (Flask dependency)
-click==8.1.7
+# Other utilities
+psutil==5.9.5
+urllib3==2.0.7

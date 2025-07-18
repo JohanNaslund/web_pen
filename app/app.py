@@ -22,8 +22,6 @@ import urllib.parse
 import traceback
 import socket
 import subprocess
-from weasyprint import HTML, CSS
-from weasyprint.text.fonts import FontConfiguration
 import tempfile
 from flask import make_response
 import pandas as pd
@@ -141,7 +139,7 @@ def setup_ip_config():
     
     if ip_config.set_exposed_ip(ip):
         flash(f'IP-adress {ip} sparad!', 'success')
-        return redirect(url_for('index'))  # Eller vilken huvudsida du vill
+        return redirect(url_for('target'))  # Eller vilken huvudsida du vill
     else:
         flash('Kunde inte spara IP-konfiguration', 'error')
         return redirect(url_for('ip_config_page'))
@@ -3940,20 +3938,184 @@ def generate_pdf_from_html_with_type(html_content, report_type):
     try:
         # Bas CSS som gäller för alla rapporter
         base_css = """
+        @page {
+            size: A4;
+            margin: 2cm;
+            @top-center {
+                content: "Säkerhetsrapport";
+                font-size: 10pt;
+                color: #666;
+            }
+            @bottom-center {
+                content: counter(page) " av " counter(pages);
+                font-size: 10pt;
+                color: #666;
+            }
+        }
         
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #333;
+        }
+        
+        .header {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .risk-high { color: #dc3545; font-weight: bold; }
+        .risk-medium { color: #fd7e14; font-weight: bold; }
+        .risk-low { color: #17a2b8; font-weight: bold; }
+        .risk-info { color: #6c757d; font-weight: bold; }
+        
+        .vulnerability-section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .vulnerability-header {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            margin-bottom: 15px;
+        }
+        
+        .vulnerability-details {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .detail-item {
+            margin-bottom: 15px;
+        }
+        
+        .detail-item h4 {
+            margin-bottom: 5px;
+            color: #495057;
+        }
+        
+        .summary-grid {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            text-align: center;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            flex: 1;
+            margin: 0 10px;
+        }
+        
+        .summary-card:first-child {
+            margin-left: 0;
+        }
+        
+        .summary-card:last-child {
+            margin-right: 0;
+        }
+        
+        .risk-category {
+            page-break-before: auto;
+            margin-bottom: 40px;
+        }
+        
+        .risk-category h2 {
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+        
+        .no-vulnerabilities {
+            text-align: center;
+            padding: 40px;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+        }
         """
         
         # Specifik CSS för varje rapporttyp
         type_specific_css = {
             'basic': """
-
+            .vulnerability-details {
+                margin-left: 10px;
+            }
+            
+            .detail-item {
+                margin-bottom: 10px;
+            }
+            
+            .instances-table {
+                display: none;
+            }
             """,
             
             'medium': """
- 
+            .vulnerability-details {
+                margin-left: 15px;
+            }
+            
+            .instances-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 10px;
+                font-size: 9pt;
+            }
+            
+            .instances-table th,
+            .instances-table td {
+                border: 1px solid #ddd;
+                padding: 6px;
+                text-align: left;
+            }
+            
+            .instances-table th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+            }
             """,
             
             'full': """
+            .detail-grid {
+                display: flex;
+                gap: 20px;
+                margin-bottom: 15px;
+            }
+            
+            .detail-grid .detail-item {
+                flex: 1;
+            }
+            
+            .instances-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 10px;
+            }
+            
+            .instances-table th,
+            .instances-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+                word-break: break-all;
+            }
+            
+            .instances-table th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+            }
+            
+            .technical-details {
+                background-color: #f8f9fa;
+                padding: 15px;
+                border-radius: 5px;
+                margin-top: 15px;
+            }
             """
         }
         
@@ -3961,6 +4123,7 @@ def generate_pdf_from_html_with_type(html_content, report_type):
         css_content = base_css + type_specific_css.get(report_type, type_specific_css['full'])
         
         # Skapa CSS-objekt
+        from weasyprint import HTML, CSS
         css = CSS(string=css_content)
         
         # Generera PDF
@@ -3968,7 +4131,8 @@ def generate_pdf_from_html_with_type(html_content, report_type):
         pdf_bytes = html_doc.write_pdf(
             stylesheets=[css],
             optimize_images=True,
-            pdf_version='1.4')
+            pdf_version='1.4'
+        )
         
         return pdf_bytes
         
@@ -4249,6 +4413,7 @@ def check_directory(path):
             'error': str(e)
         }
 
+
 def generate_pdf_from_html(html_content):
     """Generera PDF från HTML-innehåll med WeasyPrint"""
     try:
@@ -4384,7 +4549,8 @@ def generate_pdf_from_html(html_content):
         }
         """
         
-        # Skapa CSS-objekt
+        # Skapa CSS-objekt (använd string parameter direkt)
+        from weasyprint import HTML, CSS
         css = CSS(string=css_content)
         
         # Generera PDF
@@ -4396,6 +4562,8 @@ def generate_pdf_from_html(html_content):
     except Exception as e:
         app.logger.error(f"Error in PDF generation: {str(e)}")
         raise e
+
+
 
 
 @app.route('/debug-pdf')

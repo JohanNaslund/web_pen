@@ -44,7 +44,7 @@ services:
       -port 8080 
       -config api.addrs.addr.name=.* 
       -config api.addrs.addr.regex=true
-      -config api.key=your-zap-api-key-here
+      -config api.key=wsaYdB64K4
       -config connection.timeoutInSecs=120
     volumes:
       - zap-data:/zap/wrk
