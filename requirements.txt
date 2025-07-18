@@ -5,7 +5,7 @@ Flask-WTF==1.1.1
 Werkzeug==2.3.7
 
 # PDF generation
-WeasyPrint==61.2
+weasyprint>=62.0
 
 # Data processing - mycket stabila versioner
 numpy==1.23.5
