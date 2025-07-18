@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP-konfiguration - Säkerhetsapp</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .current-config {
+            background: #e8f5e8;
+            border: 1px solid #4caf50;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .current-config h2 {
+            margin-top: 0;
+            color: #2e7d32;
+        }
+        .config-item {
+            margin: 10px 0;
+            padding: 8px;
+            background: white;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+        }
+        .config-item strong {
+            color: #333;
+        }
+        .urls-section {
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .urls-section h3 {
+            margin-top: 0;
+            color: #666;
+        }
+        .url-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .url-item a {
+            color: #2196f3;
+            text-decoration: none;
+            font-family: monospace;
+        }
+        .url-item a:hover {
+            text-decoration: underline;
+        }
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        .btn-primary {
+            background: #2196f3;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1976d2;
+        }
+        .btn-secondary {
+            background: #fff;
+            color: #666;
+            border: 1px solid #ddd;
+        }
+        .btn-secondary:hover {
+            background: #f5f5f5;
+        }
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+        .change-form {
+            background: #f0f0f0;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .proxy-config {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .proxy-config h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .proxy-setting {
+            font-family: monospace;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 3px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+        }
+        .alert {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .alert-error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef5350;
+        }
+        .alert-success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 IP-konfiguration</h1>
+        
+        <!-- Visa flash-meddelanden -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'error' else 'success' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="current-config">
+            <h2>✅ Nuvarande konfiguration</h2>
+            <div class="config-item">
+                <strong>Exponerad IP:</strong> {{ config.exposed_ip }}
+            </div>
+            <div class="config-item">
+                <strong>Status:</strong> Konfigurerad
+            </div>
+        </div>
+
+        <div class="urls-section">
+            <h3>📋 Tillgängliga tjänster</h3>
+            <div class="url-item">
+                <span><strong>Säkerhetsapp:</strong></span>
+                <a href="{{ config.urls.app_url }}" target="_blank">{{ config.urls.app_url }}</a>
+            </div>
+            <div class="url-item">
+                <span><strong>ZAP UI:</strong></span>
+                <a href="{{ config.urls.zap_url }}" target="_blank">{{ config.urls.zap_url }}</a>
+            </div>
+            <div class="url-item">
+                <span><strong>ZAP Proxy:</strong></span>
+                <span style="font-family: monospace;">{{ config.urls.proxy_url }}</span>
+            </div>
+        </div>
+
+        <div class="proxy-config">
+            <h3>🔧 Proxy-inställningar för webbläsare</h3>
+            <p>Konfigurera din webbläsare med följande proxy-inställningar:</p>
+            <div class="proxy-setting">
+                <strong>HTTP Proxy:</strong> {{ config.exposed_ip }}:8090
+            </div>
+            <div class="proxy-setting">
+                <strong>HTTPS Proxy:</strong> {{ config.exposed_ip }}:8090
+            </div>
+            <div class="proxy-setting">
+                <strong>Ingen proxy för:</strong> localhost, 127.0.0.1
+            </div>
+        </div>
+
+        <div class="actions">
+            <a href="/" class="btn btn-primary">Tillbaka till huvudsidan</a>
+            <button onclick="toggleChangeForm()" class="btn btn-secondary">Ändra IP-adress</button>
+            <button onclick="resetConfig()" class="btn btn-danger">Återställ konfiguration</button>
+        </div>
+
+        <div class="change-form" id="changeForm">
+            <h3>Ändra IP-adress</h3>
+            <form method="POST" action="/ip-config/setup" id="changeIpForm">
+                <div class="form-group">
+                    <label for="newIp">Ny IP-adress:</label>
+                    <input type="text" id="newIp" name="ip" value="{{ config.exposed_ip }}" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Spara ändringar</button>
+                <button type="button" onclick="toggleChangeForm()" class="btn btn-secondary">Avbryt</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleChangeForm() {
+            const form = document.getElementById('changeForm');
+            if (form.style.display === 'none' || form.style.display === '') {
+                form.style.display = 'block';
+            } else {
+                form.style.display = 'none';
+            }
+        }
+
+        function resetConfig() {
+            if (confirm('Är du säker på att du vill återställa IP-konfigurationen? Du kommer behöva konfigurera IP-adressen igen.')) {
+                fetch('/api/ip-config/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Konfiguration återställd!');
+                        window.location.reload();
+                    } else {
+                        alert('Fel: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ett fel uppstod vid återställning');
+                });
+            }
+        }
+
+        // Validering för ändra IP-form
+        document.getElementById('changeIpForm').addEventListener('submit', function(e) {
+            const ip = document.getElementById('newIp').value.trim();
+            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+            
+            if (!ipPattern.test(ip)) {
+                e.preventDefault();
+                alert('Vänligen ange en giltig IP-adress (t.ex. 192.168.1.100)');
+                return;
+            }
+            
+            const parts = ip.split('.');
+            for (let part of parts) {
+                const num = parseInt(part);
+                if (num < 0 || num > 255) {
+                    e.preventDefault();
+                    alert('IP-adress delar måste vara mellan 0-255');
+                    return;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

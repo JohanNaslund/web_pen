@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Huvudapplikation (Flask)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: security-app
+    ports:
+      - "5001:5001"
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+      - ZAP_HOST=zap
+      - ZAP_PORT=8080
+      - ZAP_PROXY_PORT=8090
+      - ZAP_API_KEY=wsaYdB64K4
+    volumes:
+      - ./results:/app/results
+      - ./logs:/app/logs
+      - ./app:/app/app:ro  # Read-only mounting av app-koden
+    depends_on:
+      - zap
+    networks:
+      - security-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ZAP (Zed Attack Proxy)
+  zap:
+    image: zaproxy/zap-stable:latest
+    container_name: zap
+    ports:
+      - "8080:8080"  # ZAP UI
+      - "8090:8090"  # ZAP Proxy
+    command: >
+      zap.sh -daemon 
+      -host 0.0.0.0 
+      -port 8080 
+      -config api.addrs.addr.name=.* 
+      -config api.addrs.addr.regex=true
+      -config api.key=your-zap-api-key-here
+      -config connection.timeoutInSecs=120
+    volumes:
+      - zap-data:/zap/wrk
+      - ./zap-config:/zap/config:ro
+    networks:
+      - security-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/JSON/core/view/version/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  security-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  zap-data:
+    driver: local

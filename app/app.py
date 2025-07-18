@@ -29,82 +29,27 @@ from flask import make_response
 import pandas as pd
 from datetime import datetime
 import io
-from flask import make_response
 import shutil
-import glob
+from flask import jsonify
+import time
+import psutil
+from modules.access_control_manager import AccessControlManager
+from modules.ip_config import ip_config, get_app_urls
+import re
 
 active_recordings = {}
-
-#from modules.sql_injection_tester import SQLInjectionTester
-
-from modules.access_control_manager import AccessControlManager
-
-
-def get_local_ip():
-    """Hämta lokal IP-adress automatiskt"""
-    try:
-        # Metod 1: Anslut till en extern adress för att få lokal IP
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(0)
-        try:
-            # Anslut till en adress (behöver inte vara nåbar)
-            s.connect(('10.255.255.255', 1))
-            IP = s.getsockname()[0]
-        except Exception:
-            IP = '127.0.0.1'
-        finally:
-            s.close()
-        return IP
-    except Exception:
-        return '127.0.0.1'
-
-def get_ubuntu_ip():
-    """Hämta IP med Ubuntu-kommandon som fallback"""
-    try:
-        # Använd hostname -I för att få alla IP-adresser
-        result = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            # Ta första IP-adressen (oftast den primära)
-            ips = result.stdout.strip().split()
-            if ips:
-                return ips[0]
-    except Exception as e:
-        print(f"Error getting IP with hostname: {e}")
-    
-    # Fallback till ip route
-    try:
-        result = subprocess.run(['ip', 'route', 'get', '8.8.8.8'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            # Extrahera IP från output
-            for line in result.stdout.split('\n'):
-                if 'src' in line:
-                    parts = line.split()
-                    src_index = parts.index('src')
-                    if src_index + 1 < len(parts):
-                        return parts[src_index + 1]
-    except Exception as e:
-        print(f"Error getting IP with ip route: {e}")
-    
-    return '127.0.0.1'
-
-def get_server_ip():
-    """Kombinerad funktion för att få bästa IP-adress"""
-    # Prova socket-metoden först
-    ip = get_local_ip()
-    
-    # Om vi bara får localhost, prova Ubuntu-kommandon
-    if ip == '127.0.0.1':
-        ip = get_ubuntu_ip()
-    
-    return ip
+startup_time = time.time()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # För sessionshantering
 csrf = CSRFProtect(app)
 
+urls = get_app_urls()
+proxy_url = urls['proxy_url']
+zap_url = urls['zap_url']
 
 ZAP_API_KEY = 'wsaYdB64K4'
-ZAP_HOST = get_server_ip()
+ZAP_HOST = "192.168.2.110"
 PROXY_HOST = ZAP_HOST
 ZAP_API_PORT = 8080
 ZAP_PROXY_PORT = 8080
@@ -127,6 +72,130 @@ session_manager = SessionManager(storage_path='./data/sessions')
 '''report_generator = ReportGenerator(storage_path='./data/reports')'''
 
 access_control_manager = AccessControlManager(zap)
+
+
+
+@app.route('/ip-config')
+def ip_config_page():
+    """IP-konfigurationssida"""
+    if ip_config.is_configured():
+        return render_template('ip_config.html', 
+                             config=ip_config.get_config_info(),
+                             configured=True)
+    else:
+        return render_template('ip_config_setup.html', 
+                             configured=False)
+
+@app.route('/api/ip-config', methods=['GET'])
+def api_get_ip_config():
+    """API för att hämta IP-konfiguration"""
+    return jsonify(ip_config.get_config_info())
+
+@app.route('/api/ip-config', methods=['POST'])
+def api_set_ip_config():
+    """API för att sätta IP-konfiguration"""
+    data = request.get_json()
+    
+    if not data or 'ip' not in data:
+        return jsonify({'error': 'IP-adress krävs'}), 400
+    
+    ip = data['ip'].strip()
+    
+    # Validera IP-format
+    if not _is_valid_ip(ip):
+        return jsonify({'error': 'Ogiltig IP-adress format'}), 400
+    
+    # Spara IP-konfiguration
+    if ip_config.set_exposed_ip(ip):
+        return jsonify({
+            'success': True,
+            'message': f'IP-adress {ip} sparad',
+            'config': ip_config.get_config_info()
+        })
+    else:
+        return jsonify({'error': 'Kunde inte spara IP-konfiguration'}), 500
+
+@app.route('/api/ip-config/reset', methods=['POST'])
+def api_reset_ip_config():
+    """API för att rensa IP-konfiguration"""
+    if ip_config.reset_config():
+        return jsonify({
+            'success': True,
+            'message': 'IP-konfiguration återställd'
+        })
+    else:
+        return jsonify({'error': 'Kunde inte återställa konfiguration'}), 500
+
+@app.route('/ip-config/setup', methods=['POST'])
+def setup_ip_config():
+    """Formulär för att sätta IP-konfiguration"""
+    ip = request.form.get('ip', '').strip()
+    
+    if not ip:
+        flash('IP-adress krävs', 'error')
+        return redirect(url_for('ip_config_page'))
+    
+    if not _is_valid_ip(ip):
+        flash('Ogiltig IP-adress format', 'error')
+        return redirect(url_for('ip_config_page'))
+    
+    if ip_config.set_exposed_ip(ip):
+        flash(f'IP-adress {ip} sparad!', 'success')
+        return redirect(url_for('index'))  # Eller vilken huvudsida du vill
+    else:
+        flash('Kunde inte spara IP-konfiguration', 'error')
+        return redirect(url_for('ip_config_page'))
+
+def _is_valid_ip(ip: str) -> bool:
+    """Validera IP-adress format"""
+    pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    if not re.match(pattern, ip):
+        return False
+    
+    # Kontrollera att varje del är 0-255
+    parts = ip.split('.')
+    for part in parts:
+        try:
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        except ValueError:
+            return False
+    
+    return True
+
+# Middleware för att kontrollera IP-konfiguration på huvudsidor
+@app.before_request
+def check_ip_config():
+    """Kontrollera IP-konfiguration innan vissa routes"""
+    # Hoppa över IP-config routes och API
+    if request.endpoint in ['ip_config_page', 'api_get_ip_config', 'api_set_ip_config', 
+                           'api_reset_ip_config', 'setup_ip_config', 'static']:
+        return
+    
+    # Hoppa över hälsocheck
+    if request.endpoint == 'health_check':
+        return
+    
+    # Om IP inte är konfigurerad, omdirigera till config-sidan
+    if not ip_config.is_configured():
+        return redirect(url_for('ip_config_page'))
+
+# Uppdatera din befintliga health check för att inkludera IP-info
+@app.route('/api/health')
+def health_check():
+    """Hälsocheck med IP-information"""
+    health_data = {
+        'status': 'healthy',
+        'timestamp': time.time(),
+        'ip_config': ip_config.get_config_info(),
+        'services': {
+            'flask': True,
+            'zap': check_zap_health()
+        }
+    }
+    
+    return jsonify(health_data)
 
 def cleanup_old_data():
     """Rensa all gammal data från föregående tester när en ny target konfigureras"""
@@ -241,6 +310,7 @@ def access_control():
                           zap_available=zap_available,
                           is_recording=is_recording,
                           recording_data=recording_data)
+
 
 @app.route('/api/access-control/reset-zap', methods=['POST'])
 def api_access_control_reset_zap():
@@ -4135,6 +4205,49 @@ def get_zap_alerts_data(target_url):
         app.logger.error(f"Error fetching ZAP alerts for PDF: {str(e)}")
         return {'error': f'Error fetching ZAP alerts: {str(e)}'}
 
+
+
+
+def check_zap_health():
+    """Kontrollera ZAP hälsa"""
+    try:
+        import requests
+        zap_host = os.getenv('ZAP_HOST', 'localhost')
+        zap_port = os.getenv('ZAP_PORT', '8080')
+        
+        response = requests.get(
+            f'http://{zap_host}:{zap_port}/JSON/core/view/version/',
+            timeout=5
+        )
+        return response.status_code == 200
+    except:
+        return False
+
+def check_directory(path):
+    """Kontrollera om mapp existerar och är skrivbar"""
+    try:
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+        
+        # Test write access
+        test_file = os.path.join(path, '.health_check')
+        with open(test_file, 'w') as f:
+            f.write('health_check')
+        os.remove(test_file)
+        
+        return {
+            'exists': True,
+            'writable': True,
+            'size_mb': sum(os.path.getsize(os.path.join(path, f)) 
+                          for f in os.listdir(path) 
+                          if os.path.isfile(os.path.join(path, f))) / (1024*1024)
+        }
+    except Exception as e:
+        return {
+            'exists': os.path.exists(path),
+            'writable': False,
+            'error': str(e)
+        }
 
 def generate_pdf_from_html(html_content):
     """Generera PDF från HTML-innehåll med WeasyPrint"""
