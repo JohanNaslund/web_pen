@@ -234,6 +234,7 @@
         <div class="change-form" id="changeForm">
             <h3>Ändra IP-adress</h3>
             <form method="POST" action="/ip-config/setup" id="changeIpForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="form-group">
                     <label for="newIp">Ny IP-adress:</label>
                     <input type="text" id="newIp" name="ip" value="{{ config.exposed_ip }}" required>
